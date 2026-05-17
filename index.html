@@ -1,685 +1,539 @@
-import { useState, useEffect } from "react";
-
-const CURRENCIES = ["USD", "MYR"];
-const ASSET_TYPES = ["Stocks", "Crypto", "ETF/Funds", "Real Estate", "Cash", "Bonds", "Provident Fund", "Other"];
-const TAGS = ["Growth", "Dividend", "Emergency Fund", "Speculative", "Stable", "Retirement", "Short-term"];
-const MYR_RATE = 4.000;
-
-function toUSD(amount, currency) { return currency === "MYR" ? amount / MYR_RATE : amount; }
-
-function fmt(n, currency = "USD") {
-  const sym = currency === "USD" ? "$" : "RM";
-  return sym + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>My Portfolio Dashboard</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg1:#ffffff;--bg2:#f5f5f3;--bg3:#eeede8;
+  --bgi:rgba(230,241,251,1);--bgd:rgba(252,235,235,1);
+  --t1:#1a1a18;--t2:#6b6b67;--t3:#9b9b97;
+  --ti:#185fa5;--ts:#3b6d11;--td:#a32d2d;
+  --b1:rgba(0,0,0,0.15);--b2:rgba(0,0,0,0.25);--bi:rgba(24,95,165,0.35);
+  --r1:8px;--r2:12px;
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
 }
-function pct(n) { return (n >= 0 ? "+" : "") + n.toFixed(2) + "%"; }
+@media(prefers-color-scheme:dark){:root{
+  --bg1:#1e1e1c;--bg2:#2a2a28;--bg3:#242422;
+  --bgi:rgba(12,46,74,1);--bgd:rgba(46,16,16,1);
+  --t1:#f0efe8;--t2:#a0a09a;--t3:#6b6b67;
+  --ti:#85b7eb;--ts:#97c459;--td:#f09595;
+  --b1:rgba(255,255,255,0.12);--b2:rgba(255,255,255,0.22);--bi:rgba(133,183,235,0.3)
+}}
+body{font-family:var(--font);color:var(--t1);background:var(--bg3);min-height:100vh}
+#root{max-width:820px;margin:0 auto;padding:1.5rem 1rem}
+input,select{font-family:var(--font);font-size:13px;color:var(--t1);background:var(--bg1);
+  border:0.5px solid var(--b2);border-radius:var(--r1);padding:7px 10px;outline:none;transition:border-color .15s}
+input:focus,select:focus{border-color:var(--ti);box-shadow:0 0 0 2px var(--bgi)}
+button{font-family:var(--font);cursor:pointer;border-radius:var(--r1);border:0.5px solid var(--b2);
+  background:transparent;color:var(--t1);transition:background .15s,transform .1s}
+button:hover{background:var(--bg2)}
+button:active{transform:scale(0.98)}
+th{font-weight:500}
+</style>
+</head>
+<body>
+<div id="root"><p style="padding:2rem;color:#999">Loading dashboard…</p></div>
+<script type="text/babel">
+const {useState,useEffect}=React;
+const CURRENCIES=["USD","MYR"];
+const ASSET_TYPES=["Stocks","Crypto","ETF/Funds","Real Estate","Cash","Bonds","Provident Fund","Other"];
+const TAGS=["Growth","Dividend","Emergency Fund","Speculative","Stable","Retirement","Short-term"];
+const MYR_RATE=4.000;
+const SK="pfDash_v2";
 
-const EMPTY_H = { name: "", type: "Stocks", currency: "USD", purchasePrice: "", currentPrice: "", quantity: "", tag: "Growth", note: "" };
-const PIE_COLORS = ["#378ADD","#1D9E75","#D85A30","#D4537E","#BA7517","#7F77DD","#639922","#E08A3C"];
+const toUSD=(a,c)=>c==="MYR"?a/MYR_RATE:a;
+const fmt=(n,c="USD")=>(c==="USD"?"$":"RM")+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const pct=n=>(n>=0?"+":"")+n.toFixed(2)+"%";
+const EMPTY_H={name:"",type:"Stocks",currency:"USD",purchasePrice:"",currentPrice:"",quantity:"",tag:"Growth",note:""};
+const COLORS=["#378ADD","#1D9E75","#D85A30","#D4537E","#BA7517","#7F77DD","#639922","#E08A3C"];
 
-function PieChart({ data, displayCur }) {
-  const size = 200, cx = 100, cy = 100, r = 72, ir = 40;
-  let angle = -Math.PI / 2;
-  const total = data.reduce((s, d) => s + d.value, 0);
-  if (total === 0) return <div style={{ textAlign: "center", color: "var(--color-text-secondary)", fontSize: 13, padding: "2rem" }}>No holdings yet</div>;
-  const slices = data.map((d, i) => {
-    const a = (d.value / total) * 2 * Math.PI;
+function PieChart({data}){
+  const sz=200,cx=100,cy=100,r=72,ir=40;
+  let angle=-Math.PI/2;
+  const total=data.reduce((s,d)=>s+d.value,0);
+  if(!total)return React.createElement("div",{style:{textAlign:"center",color:"var(--t2)",fontSize:13,padding:"2rem"}},"No holdings yet");
+  const slices=data.map((d,i)=>{
+    const a=(d.value/total)*2*Math.PI;
     const x1=cx+r*Math.cos(angle),y1=cy+r*Math.sin(angle);
     const x2=cx+r*Math.cos(angle+a),y2=cy+r*Math.sin(angle+a);
     const xi1=cx+ir*Math.cos(angle),yi1=cy+ir*Math.sin(angle);
     const xi2=cx+ir*Math.cos(angle+a),yi2=cy+ir*Math.sin(angle+a);
-    const large=a>Math.PI?1:0;
-    const path=`M${xi1},${yi1} L${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} L${xi2},${yi2} A${ir},${ir} 0 ${large} 0 ${xi1},${yi1} Z`;
-    angle += a;
-    return <path key={i} d={path} fill={PIE_COLORS[i % PIE_COLORS.length]} />;
+    const lg=a>Math.PI?1:0;
+    const p=`M${xi1},${yi1}L${x1},${y1}A${r},${r} 0 ${lg} 1 ${x2},${y2}L${xi2},${yi2}A${ir},${ir} 0 ${lg} 0 ${xi1},${yi1}Z`;
+    angle+=a;
+    return <path key={i} d={p} fill={COLORS[i%COLORS.length]}/>;
   });
-  return (
-    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>{slices}</svg>
-  );
+  return <svg viewBox={`0 0 ${sz} ${sz}`} width={sz} height={sz}>{slices}</svg>;
 }
 
-function ProgressBar({ current, target, currency }) {
-  const p = Math.min((current / target) * 100, 100);
-  return (
-    <div style={{ marginTop: 6 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>
-        <span>{fmt(current, currency)}</span><span>{p.toFixed(1)}%</span>
+function Bar({current,target,currency}){
+  const p=Math.min((current/target)*100,100);
+  return(
+    <div style={{marginTop:6}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"var(--t2)",marginBottom:4}}>
+        <span>{fmt(current,currency)}</span><span>{p.toFixed(1)}%</span>
       </div>
-      <div style={{ height: 8, background: "var(--color-background-secondary)", borderRadius: 99, overflow: "hidden" }}>
-        <div style={{ width: p + "%", height: "100%", background: p >= 100 ? "#1D9E75" : "#378ADD", borderRadius: 99, transition: "width 0.4s" }} />
+      <div style={{height:8,background:"var(--bg2)",borderRadius:99,overflow:"hidden"}}>
+        <div style={{width:p+"%",height:"100%",background:p>=100?"#1D9E75":"#378ADD",borderRadius:99,transition:"width .4s"}}/>
       </div>
-      <div style={{ textAlign: "right", fontSize: 12, color: "var(--color-text-secondary)", marginTop: 4 }}>Target: {fmt(target, currency)}</div>
+      <div style={{textAlign:"right",fontSize:12,color:"var(--t2)",marginTop:4}}>Target: {fmt(target,currency)}</div>
     </div>
   );
 }
 
-const STORAGE_KEY = "pfDashboardData_v2";
+function App(){
+  const [tab,setTab]=useState("overview");
+  const [holdings,setHoldings]=useState([]);
+  const [goals,setGoals]=useState([]);
+  const [txs,setTxs]=useState([]);
+  const [showH,setShowH]=useState(false);
+  const [showG,setShowG]=useState(false);
+  const [showTx,setShowTx]=useState(false);
+  const [hForm,setHForm]=useState(EMPTY_H);
+  const [gForm,setGForm]=useState({name:"",target:"",currency:"USD"});
+  const [txForm,setTxForm]=useState({type:"BUY",assetName:"",assetType:"Stocks",currency:"USD",price:"",quantity:"",tag:"Growth",note:""});
+  const [ftType,setFtType]=useState("All");
+  const [ftTag,setFtTag]=useState("All");
+  const [txFt,setTxFt]=useState("All");
+  const [dc,setDc]=useState("USD");
+  const [editIdx,setEditIdx]=useState(null);
+  const [sCol,setSCol]=useState(null);
+  const [sDir,setSDir]=useState("desc");
+  const [txSCol,setTxSCol]=useState("timestamp");
+  const [txSDir,setTxSDir]=useState("desc");
 
-export default function App() {
-  const [tab, setTab] = useState("overview");
-  const [holdings, setHoldings] = useState([]);
-  const [goals, setGoals] = useState([]);
-  const [transactions, setTransactions] = useState([]);
-  const [showAddH, setShowAddH] = useState(false);
-  const [showAddG, setShowAddG] = useState(false);
-  const [showAddTx, setShowAddTx] = useState(false);
-  const [form, setForm] = useState(EMPTY_H);
-  const [goalForm, setGoalForm] = useState({ name: "", target: "", currency: "USD" });
-  const [txForm, setTxForm] = useState({ type: "BUY", assetName: "", assetType: "Stocks", currency: "USD", price: "", quantity: "", tag: "Growth", note: "" });
-  const [filterType, setFilterType] = useState("All");
-  const [filterTag, setFilterTag] = useState("All");
-  const [txFilterType, setTxFilterType] = useState("All");
-  const [displayCur, setDisplayCur] = useState("USD");
-  const [editIdx, setEditIdx] = useState(null);
-  const [sortCol, setSortCol] = useState(null);
-  const [sortDir, setSortDir] = useState("desc");
-  const [txSortCol, setTxSortCol] = useState("timestamp");
-  const [txSortDir, setTxSortDir] = useState("desc");
-  const [loaded, setLoaded] = useState(false);
+  useEffect(()=>{
+    try{const d=localStorage.getItem(SK);if(d){const p=JSON.parse(d);setHoldings(p.holdings||[]);setGoals(p.goals||[]);setTxs(p.txs||[]);}}catch{}
+  },[]);
+  useEffect(()=>{try{localStorage.setItem(SK,JSON.stringify({holdings,goals,txs}));}catch{}},[holdings,goals,txs]);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await window.storage.get(STORAGE_KEY);
-        if (r?.value) {
-          const d = JSON.parse(r.value);
-          setHoldings(d.holdings || []);
-          setGoals(d.goals || []);
-          setTransactions(d.transactions || []);
-        }
-      } catch {}
-      setLoaded(true);
-    })();
-  }, []);
+  const cvt=(a,f)=>{const u=toUSD(a,f);return dc==="USD"?u:u*MYR_RATE;};
+  const tv=holdings.reduce((s,h)=>s+cvt(h.currentPrice*h.quantity,h.currency),0);
+  const tc=holdings.reduce((s,h)=>s+cvt(h.purchasePrice*h.quantity,h.currency),0);
+  const tgl=tv-tc,tglp=tc>0?(tgl/tc)*100:0;
+  const glc=tgl>=0?"#1D9E75":"#D85A30";
 
-  useEffect(() => {
-    if (!loaded) return;
-    window.storage.set(STORAGE_KEY, JSON.stringify({ holdings, goals, transactions })).catch(() => {});
-  }, [holdings, goals, transactions, loaded]);
+  const byType=ASSET_TYPES.map((t,i)=>({label:t,color:COLORS[i],value:holdings.filter(h=>h.type===t).reduce((s,h)=>s+cvt(h.currentPrice*h.quantity,h.currency),0)})).filter(d=>d.value>0);
 
-  const cvt = (amount, fromCur) => {
-    const usd = toUSD(amount, fromCur);
-    return displayCur === "USD" ? usd : usd * MYR_RATE;
-  };
+  function sortH(col){if(sCol===col)setSDir(d=>d==="asc"?"desc":"asc");else{setSCol(col);setSDir("desc");}}
+  function si(col){if(sCol!==col)return" ↕";return sDir==="asc"?" ↑":" ↓";}
+  function sortTx(col){if(txSCol===col)setTxSDir(d=>d==="asc"?"desc":"asc");else{setTxSCol(col);setTxSDir("desc");}}
+  function tsi(col){if(txSCol!==col)return" ↕";return txSDir==="asc"?" ↑":" ↓";}
 
-  const totalValue = holdings.reduce((s, h) => s + cvt(h.currentPrice * h.quantity, h.currency), 0);
-  const totalCost  = holdings.reduce((s, h) => s + cvt(h.purchasePrice * h.quantity, h.currency), 0);
-  const totalGL = totalValue - totalCost;
-  const totalGLp = totalCost > 0 ? (totalGL / totalCost) * 100 : 0;
-  const glColor = totalGL >= 0 ? "#1D9E75" : "#D85A30";
-
-  const byType = ASSET_TYPES.map((t, i) => ({
-    label: t, color: PIE_COLORS[i],
-    value: holdings.filter(h => h.type === t).reduce((s, h) => s + cvt(h.currentPrice * h.quantity, h.currency), 0)
-  })).filter(d => d.value > 0);
-
-  // Holdings sort
-  function handleSort(col) {
-    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortCol(col); setSortDir("desc"); }
-  }
-  function sortIcon(col) {
-    if (sortCol !== col) return " ↕";
-    return sortDir === "asc" ? " ↑" : " ↓";
-  }
-
-  const filtered = holdings.filter(h =>
-    (filterType === "All" || h.type === filterType) &&
-    (filterTag === "All" || h.tag === filterTag)
-  );
-
-  const sortedHoldings = [...filtered].sort((a, b) => {
-    if (!sortCol) return 0;
-    let av, bv;
-    if (sortCol === "name") { av = a.name.toLowerCase(); bv = b.name.toLowerCase(); }
-    else if (sortCol === "type") { av = a.type; bv = b.type; }
-    else if (sortCol === "tag") { av = a.tag; bv = b.tag; }
-    else if (sortCol === "qty") { av = a.quantity; bv = b.quantity; }
-    else if (sortCol === "value") { av = cvt(a.currentPrice * a.quantity, a.currency); bv = cvt(b.currentPrice * b.quantity, b.currency); }
-    else if (sortCol === "share") {
-      av = totalValue > 0 ? cvt(a.currentPrice * a.quantity, a.currency) / totalValue * 100 : 0;
-      bv = totalValue > 0 ? cvt(b.currentPrice * b.quantity, b.currency) / totalValue * 100 : 0;
-    }
-    else if (sortCol === "gl") { av = cvt(a.currentPrice * a.quantity, a.currency) - cvt(a.purchasePrice * a.quantity, a.currency); bv = cvt(b.currentPrice * b.quantity, b.currency) - cvt(b.purchasePrice * b.quantity, b.currency); }
-    else if (sortCol === "glp") {
-      const ac = cvt(a.purchasePrice * a.quantity, a.currency), bc = cvt(b.purchasePrice * b.quantity, b.currency);
-      av = ac > 0 ? (cvt(a.currentPrice * a.quantity, a.currency) - ac) / ac * 100 : 0;
-      bv = bc > 0 ? (cvt(b.currentPrice * b.quantity, b.currency) - bc) / bc * 100 : 0;
-    }
-    if (av < bv) return sortDir === "asc" ? -1 : 1;
-    if (av > bv) return sortDir === "asc" ? 1 : -1;
-    return 0;
+  const filtered=holdings.filter(h=>(ftType==="All"||h.type===ftType)&&(ftTag==="All"||h.tag===ftTag));
+  const sorted=[...filtered].sort((a,b)=>{
+    if(!sCol)return 0;
+    let av,bv;
+    if(sCol==="name"){av=a.name.toLowerCase();bv=b.name.toLowerCase();}
+    else if(sCol==="type"){av=a.type;bv=b.type;}
+    else if(sCol==="tag"){av=a.tag;bv=b.tag;}
+    else if(sCol==="qty"){av=a.quantity;bv=b.quantity;}
+    else if(sCol==="value"){av=cvt(a.currentPrice*a.quantity,a.currency);bv=cvt(b.currentPrice*b.quantity,b.currency);}
+    else if(sCol==="share"){av=tv>0?cvt(a.currentPrice*a.quantity,a.currency)/tv*100:0;bv=tv>0?cvt(b.currentPrice*b.quantity,b.currency)/tv*100:0;}
+    else if(sCol==="gl"){av=cvt(a.currentPrice*a.quantity,a.currency)-cvt(a.purchasePrice*a.quantity,a.currency);bv=cvt(b.currentPrice*b.quantity,b.currency)-cvt(b.purchasePrice*b.quantity,b.currency);}
+    else if(sCol==="glp"){const ac=cvt(a.purchasePrice*a.quantity,a.currency),bc=cvt(b.purchasePrice*b.quantity,b.currency);av=ac>0?(cvt(a.currentPrice*a.quantity,a.currency)-ac)/ac*100:0;bv=bc>0?(cvt(b.currentPrice*b.quantity,b.currency)-bc)/bc*100:0;}
+    if(av<bv)return sDir==="asc"?-1:1;if(av>bv)return sDir==="asc"?1:-1;return 0;
   });
 
-  // Transactions sort
-  function handleTxSort(col) {
-    if (txSortCol === col) setTxSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setTxSortCol(col); setTxSortDir("desc"); }
-  }
-  function txSortIcon(col) {
-    if (txSortCol !== col) return " ↕";
-    return txSortDir === "asc" ? " ↑" : " ↓";
-  }
-
-  const filteredTx = transactions.filter(t => txFilterType === "All" || t.assetType === txFilterType);
-  const sortedTx = [...filteredTx].sort((a, b) => {
-    let av, bv;
-    if (txSortCol === "timestamp") { av = a.timestamp; bv = b.timestamp; }
-    else if (txSortCol === "assetName") { av = a.assetName.toLowerCase(); bv = b.assetName.toLowerCase(); }
-    else if (txSortCol === "type") { av = a.type; bv = b.type; }
-    else if (txSortCol === "assetType") { av = a.assetType; bv = b.assetType; }
-    else if (txSortCol === "quantity") { av = a.quantity; bv = b.quantity; }
-    else if (txSortCol === "price") { av = a.price; bv = b.price; }
-    else if (txSortCol === "total") { av = a.price * a.quantity; bv = b.price * b.quantity; }
-    if (av < bv) return txSortDir === "asc" ? -1 : 1;
-    if (av > bv) return txSortDir === "asc" ? 1 : -1;
-    return 0;
+  const filteredTx=txs.filter(t=>txFt==="All"||t.assetType===txFt);
+  const sortedTx=[...filteredTx].sort((a,b)=>{
+    let av,bv;
+    if(txSCol==="timestamp"){av=a.timestamp;bv=b.timestamp;}
+    else if(txSCol==="assetName"){av=a.assetName.toLowerCase();bv=b.assetName.toLowerCase();}
+    else if(txSCol==="type"){av=a.type;bv=b.type;}
+    else if(txSCol==="assetType"){av=a.assetType;bv=b.assetType;}
+    else if(txSCol==="quantity"){av=a.quantity;bv=b.quantity;}
+    else if(txSCol==="price"){av=a.price;bv=b.price;}
+    else if(txSCol==="total"){av=a.price*a.quantity;bv=b.price*b.quantity;}
+    if(av<bv)return txSDir==="asc"?-1:1;if(av>bv)return txSDir==="asc"?1:-1;return 0;
   });
 
-  function saveHolding() {
-    const h = { ...form, purchasePrice: parseFloat(form.purchasePrice) || 0, currentPrice: parseFloat(form.currentPrice) || 0, quantity: parseFloat(form.quantity) || 0 };
-    if (!h.name) return;
-    if (editIdx !== null) { setHoldings(p => p.map((x, i) => i === editIdx ? h : x)); setEditIdx(null); }
-    else setHoldings(p => [...p, h]);
-    setForm(EMPTY_H); setShowAddH(false);
+  function saveH(){
+    const h={...hForm,purchasePrice:parseFloat(hForm.purchasePrice)||0,currentPrice:parseFloat(hForm.currentPrice)||0,quantity:parseFloat(hForm.quantity)||0};
+    if(!h.name)return;
+    if(editIdx!==null){setHoldings(p=>p.map((x,i)=>i===editIdx?h:x));setEditIdx(null);}
+    else setHoldings(p=>[...p,h]);
+    setHForm(EMPTY_H);setShowH(false);
   }
+  function startEdit(i){const h=holdings[i];setHForm({...h,purchasePrice:String(h.purchasePrice),currentPrice:String(h.currentPrice),quantity:String(h.quantity)});setEditIdx(i);setShowH(true);}
+  function saveG(){if(!gForm.name||!gForm.target)return;setGoals(p=>[...p,{...gForm,target:parseFloat(gForm.target)}]);setGForm({name:"",target:"",currency:"USD"});setShowG(false);}
 
-  function startEdit(i) {
-    const h = holdings[i];
-    setForm({ ...h, purchasePrice: String(h.purchasePrice), currentPrice: String(h.currentPrice), quantity: String(h.quantity) });
-    setEditIdx(i); setShowAddH(true);
-  }
-
-  function saveGoal() {
-    if (!goalForm.name || !goalForm.target) return;
-    setGoals(p => [...p, { ...goalForm, target: parseFloat(goalForm.target) }]);
-    setGoalForm({ name: "", target: "", currency: "USD" }); setShowAddG(false);
-  }
-
-  function commitTransaction() {
-    const price = parseFloat(txForm.price) || 0;
-    const qty = parseFloat(txForm.quantity) || 0;
-    if (!txForm.assetName || !price || !qty) return;
-
-    const tx = { ...txForm, price, quantity: qty, timestamp: new Date().toISOString(), id: Date.now() };
-    setTransactions(p => [tx, ...p]);
-
-    // Update holdings
-    setHoldings(prev => {
-      const idx = prev.findIndex(h => h.name.toLowerCase() === txForm.assetName.toLowerCase() && h.currency === txForm.currency);
-      if (txForm.type === "BUY") {
-        if (idx >= 0) {
-          const h = prev[idx];
-          const totalQty = h.quantity + qty;
-          const avgPrice = (h.purchasePrice * h.quantity + price * qty) / totalQty;
-          return prev.map((x, i) => i === idx ? { ...x, quantity: totalQty, purchasePrice: avgPrice, currentPrice: price } : x);
-        } else {
-          return [...prev, { name: txForm.assetName, type: txForm.assetType, currency: txForm.currency, purchasePrice: price, currentPrice: price, quantity: qty, tag: txForm.tag, note: txForm.note }];
-        }
-      } else { // SELL
-        if (idx >= 0) {
-          const h = prev[idx];
-          const newQty = h.quantity - qty;
-          if (newQty <= 0) return prev.filter((_, i) => i !== idx);
-          return prev.map((x, i) => i === idx ? { ...x, quantity: newQty, currentPrice: price } : x);
-        }
+  function commitTx(){
+    const price=parseFloat(txForm.price)||0,qty=parseFloat(txForm.quantity)||0;
+    if(!txForm.assetName||!price||!qty)return;
+    const tx={...txForm,price,quantity:qty,timestamp:new Date().toISOString(),id:Date.now()};
+    setTxs(p=>[tx,...p]);
+    setHoldings(prev=>{
+      const idx=prev.findIndex(h=>h.name.toLowerCase()===txForm.assetName.toLowerCase()&&h.currency===txForm.currency);
+      if(txForm.type==="BUY"){
+        if(idx>=0){const h=prev[idx],tq=h.quantity+qty,ap=(h.purchasePrice*h.quantity+price*qty)/tq;return prev.map((x,i)=>i===idx?{...x,quantity:tq,purchasePrice:ap,currentPrice:price}:x);}
+        return [...prev,{name:txForm.assetName,type:txForm.assetType,currency:txForm.currency,purchasePrice:price,currentPrice:price,quantity:qty,tag:txForm.tag,note:txForm.note}];
+      }else{
+        if(idx>=0){const nq=prev[idx].quantity-qty;if(nq<=0)return prev.filter((_,i)=>i!==idx);return prev.map((x,i)=>i===idx?{...x,quantity:nq,currentPrice:price}:x);}
         return prev;
       }
     });
-
-    setTxForm({ type: "BUY", assetName: "", assetType: "Stocks", currency: "USD", price: "", quantity: "", tag: "Growth", note: "" });
-    setShowAddTx(false);
+    setTxForm({type:"BUY",assetName:"",assetType:"Stocks",currency:"USD",price:"",quantity:"",tag:"Growth",note:""});
+    setShowTx(false);
   }
 
-  function exportCSV() {
-    const rows = [["Name","Type","Tag","Currency","Purchase Price","Current Price","Quantity","Current Value","Gain/Loss","Gain/Loss %","Portfolio Share"]];
-    holdings.forEach(h => {
-      const val = cvt(h.currentPrice * h.quantity, h.currency);
-      const cost = cvt(h.purchasePrice * h.quantity, h.currency);
-      const gl = val - cost;
-      const share = totalValue > 0 ? (val / totalValue * 100).toFixed(2) : "0";
-      rows.push([h.name, h.type, h.tag, h.currency, h.purchasePrice, h.currentPrice, h.quantity, val.toFixed(2), gl.toFixed(2), (cost > 0 ? (gl/cost*100).toFixed(2) : 0)+"%", share+"%"]);
-    });
-    const a = document.createElement("a");
-    a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(rows.map(r => r.join(",")).join("\n"));
-    a.download = "portfolio.csv"; a.click();
+  function exportCSV(){
+    const rows=[["Name","Type","Tag","Currency","Purchase Price","Current Price","Quantity","Current Value","Gain/Loss","Gain/Loss %","Portfolio Share"]];
+    holdings.forEach(h=>{const v=cvt(h.currentPrice*h.quantity,h.currency),c=cvt(h.purchasePrice*h.quantity,h.currency),gl=v-c,sh=tv>0?(v/tv*100).toFixed(2):0;rows.push([h.name,h.type,h.tag,h.currency,h.purchasePrice,h.currentPrice,h.quantity,v.toFixed(2),gl.toFixed(2),(c>0?(gl/c*100).toFixed(2):0)+"%",sh+"%"]);});
+    dl(rows,"portfolio.csv");
   }
-
-  function exportTxCSV() {
-    const rows = [["Timestamp","Type","Asset","Asset Type","Tag","Currency","Price","Quantity","Total","Note"]];
-    transactions.forEach(t => {
-      rows.push([new Date(t.timestamp).toLocaleString(), t.type, t.assetName, t.assetType, t.tag, t.currency, t.price, t.quantity, (t.price*t.quantity).toFixed(2), t.note]);
-    });
-    const a = document.createElement("a");
-    a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(rows.map(r => r.join(",")).join("\n"));
-    a.download = "transactions.csv"; a.click();
+  function exportTxCSV(){
+    const rows=[["Timestamp","Type","Asset","Asset Type","Tag","Currency","Price","Quantity","Total","Note"]];
+    txs.forEach(t=>rows.push([new Date(t.timestamp).toLocaleString(),t.type,t.assetName,t.assetType,t.tag,t.currency,t.price,t.quantity,(t.price*t.quantity).toFixed(2),t.note]));
+    dl(rows,"transactions.csv");
   }
+  function dl(rows,name){const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(rows.map(r=>r.join(",")).join("\n"));a.download=name;a.click();}
 
-  const cardStyle = { background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: "var(--border-radius-lg)", padding: "1rem 1.25rem" };
-  const tabs = ["overview","holdings","transactions","goals"];
-  const tabLabel = { overview: "Overview", holdings: "Holdings", transactions: "Transactions", goals: "Goals" };
+  const card={background:"var(--bg1)",border:"0.5px solid var(--b1)",borderRadius:"var(--r2)",padding:"1rem 1.25rem"};
+  const tabs=["overview","holdings","transactions","goals"];
+  const tLabel={overview:"Overview",holdings:"Holdings",transactions:"Transactions",goals:"Goals"};
+  const thS=(col,left)=>({padding:"8px 6px",textAlign:left?"left":"right",cursor:"pointer",userSelect:"none",whiteSpace:"nowrap",color:sCol===col?"var(--t1)":"var(--t2)"});
+  const txThS=(col,left)=>({padding:"8px 6px",textAlign:left?"left":"right",cursor:"pointer",userSelect:"none",whiteSpace:"nowrap",color:txSCol===col?"var(--t1)":"var(--t2)"});
 
-  const thStyle = (col) => ({
-    padding: "8px 6px", textAlign: col === "name" ? "left" : "right", fontWeight: 500,
-    cursor: "pointer", userSelect: "none", whiteSpace: "nowrap",
-    color: sortCol === col ? "var(--color-text-primary)" : "var(--color-text-secondary)"
-  });
-  const txThStyle = (col) => ({
-    padding: "8px 6px", textAlign: col === "assetName" || col === "timestamp" ? "left" : "right", fontWeight: 500,
-    cursor: "pointer", userSelect: "none", whiteSpace: "nowrap",
-    color: txSortCol === col ? "var(--color-text-primary)" : "var(--color-text-secondary)"
-  });
-
-  if (!loaded) return <div style={{ padding: "2rem", color: "var(--color-text-secondary)", fontSize: 14 }}>Loading...</div>;
-
-  return (
-    <div style={{ fontFamily: "var(--font-sans)", color: "var(--color-text-primary)", padding: "1rem 0" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
+  return(
+    <div style={{fontFamily:"var(--font)",color:"var(--t1)"}}>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
         <div>
-          <p style={{ margin: 0, fontSize: 13, color: "var(--color-text-secondary)" }}>Portfolio Dashboard</p>
-          <p style={{ margin: 0, fontSize: 22, fontWeight: 500 }}>My Investments</p>
+          <p style={{fontSize:13,color:"var(--t2)"}}>Portfolio Dashboard</p>
+          <p style={{fontSize:22,fontWeight:500}}>My Investments</p>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>Display in</span>
-          {CURRENCIES.map(c => (
-            <button key={c} onClick={() => setDisplayCur(c)}
-              style={{ padding: "4px 12px", fontSize: 12, fontWeight: displayCur === c ? 500 : 400,
-                background: displayCur === c ? "var(--color-background-info)" : "transparent",
-                color: displayCur === c ? "var(--color-text-info)" : "var(--color-text-secondary)",
-                border: "0.5px solid var(--color-border-secondary)", borderRadius: "var(--border-radius-md)", cursor: "pointer" }}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:12,color:"var(--t2)"}}>Display in</span>
+          {CURRENCIES.map(c=>(
+            <button key={c} onClick={()=>setDc(c)} style={{padding:"4px 12px",fontSize:12,fontWeight:dc===c?500:400,
+              background:dc===c?"var(--bgi)":"transparent",color:dc===c?"var(--ti)":"var(--t2)",
+              border:"0.5px solid var(--b1)",borderRadius:"var(--r1)"}}>
               {c}
             </button>
           ))}
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 0, borderBottom: "0.5px solid var(--color-border-tertiary)", marginBottom: "1.25rem" }}>
-        {tabs.map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            style={{ padding: "8px 20px", fontSize: 14, background: "transparent", border: "none",
-              borderBottom: tab === t ? "2px solid var(--color-text-primary)" : "2px solid transparent",
-              color: tab === t ? "var(--color-text-primary)" : "var(--color-text-secondary)",
-              cursor: "pointer", fontWeight: tab === t ? 500 : 400 }}>
-            {tabLabel[t]}
+      {/* Tabs */}
+      <div style={{display:"flex",borderBottom:"0.5px solid var(--b1)",marginBottom:"1.25rem"}}>
+        {tabs.map(t=>(
+          <button key={t} onClick={()=>setTab(t)} style={{padding:"8px 20px",fontSize:14,background:"transparent",border:"none",
+            borderBottom:tab===t?"2px solid var(--t1)":"2px solid transparent",
+            color:tab===t?"var(--t1)":"var(--t2)",fontWeight:tab===t?500:400}}>
+            {tLabel[t]}
           </button>
         ))}
       </div>
 
       {/* OVERVIEW */}
-      {tab === "overview" && (
+      {tab==="overview"&&(
         <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 12, marginBottom: "1.25rem" }}>
-            {[
-              { label: "Total Value", value: fmt(totalValue, displayCur), color: "var(--color-text-primary)" },
-              { label: "Total Cost", value: fmt(totalCost, displayCur), color: "var(--color-text-secondary)" },
-              { label: "Gain / Loss", value: fmt(Math.abs(totalGL), displayCur), color: glColor, pre: totalGL >= 0 ? "▲ " : "▼ " },
-              { label: "Return", value: pct(totalGLp), color: glColor },
-            ].map(c => (
-              <div key={c.label} style={{ background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", padding: "1rem" }}>
-                <p style={{ margin: "0 0 4px", fontSize: 13, color: "var(--color-text-secondary)" }}>{c.label}</p>
-                <p style={{ margin: 0, fontSize: 20, fontWeight: 500, color: c.color }}>{c.pre || ""}{c.value}</p>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:"1.25rem"}}>
+            {[{l:"Total Value",v:fmt(tv,dc),c:"var(--t1)"},{l:"Total Cost",v:fmt(tc,dc),c:"var(--t2)"},
+              {l:"Gain / Loss",v:fmt(Math.abs(tgl),dc),c:glc,pre:tgl>=0?"▲ ":"▼ "},{l:"Return",v:pct(tglp),c:glc}
+            ].map(x=>(
+              <div key={x.l} style={{background:"var(--bg2)",borderRadius:"var(--r1)",padding:"1rem"}}>
+                <p style={{fontSize:13,color:"var(--t2)",marginBottom:4}}>{x.l}</p>
+                <p style={{fontSize:20,fontWeight:500,color:x.c}}>{x.pre||""}{x.v}</p>
               </div>
             ))}
           </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            <div style={cardStyle}>
-              <p style={{ margin: "0 0 12px", fontWeight: 500, fontSize: 14 }}>Asset allocation</p>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <PieChart data={byType} displayCur={displayCur} />
-                <div style={{ flex: 1 }}>
-                  {byType.map((d, i) => (
-                    <div key={d.label} style={{ display: "flex", alignItems: "flex-start", gap: 6, marginBottom: 7 }}>
-                      <span style={{ width: 10, height: 10, borderRadius: 2, background: d.color, flexShrink: 0, marginTop: 2 }} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{d.label}</span>
-                          <span style={{ fontSize: 12, fontWeight: 500 }}>{((d.value / totalValue) * 100).toFixed(1)}%</span>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+            <div style={card}>
+              <p style={{fontWeight:500,fontSize:14,marginBottom:12}}>Asset allocation</p>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <PieChart data={byType}/>
+                <div style={{flex:1}}>
+                  {byType.map((d)=>(
+                    <div key={d.label} style={{display:"flex",alignItems:"flex-start",gap:6,marginBottom:7}}>
+                      <span style={{width:10,height:10,borderRadius:2,background:d.color,flexShrink:0,marginTop:2}}/>
+                      <div style={{flex:1}}>
+                        <div style={{display:"flex",justifyContent:"space-between"}}>
+                          <span style={{fontSize:12,color:"var(--t2)"}}>{d.label}</span>
+                          <span style={{fontSize:12,fontWeight:500}}>{((d.value/tv)*100).toFixed(1)}%</span>
                         </div>
-                        <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{fmt(d.value, displayCur)}</div>
+                        <div style={{fontSize:11,color:"var(--t2)"}}>{fmt(d.value,dc)}</div>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
-
-            <div style={cardStyle}>
-              <p style={{ margin: "0 0 12px", fontWeight: 500, fontSize: 14 }}>Top holdings</p>
-              {holdings.length === 0
-                ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>No holdings yet.</p>
-                : [...holdings]
-                    .sort((a, b) => cvt(b.currentPrice * b.quantity, b.currency) - cvt(a.currentPrice * a.quantity, a.currency))
-                    .slice(0, 10)
-                    .map((h, i) => {
-                      const val = cvt(h.currentPrice * h.quantity, h.currency);
-                      const cost = cvt(h.purchasePrice * h.quantity, h.currency);
-                      const gl = val - cost;
-                      return (
-                        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, paddingBottom: 8, borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
-                          <div>
-                            <p style={{ margin: 0, fontSize: 13, fontWeight: 500 }}>{h.name}</p>
-                            <p style={{ margin: 0, fontSize: 11, color: "var(--color-text-secondary)" }}>{h.type} · {h.tag}</p>
-                          </div>
-                          <div style={{ textAlign: "right" }}>
-                            <p style={{ margin: 0, fontSize: 13, fontWeight: 500 }}>{fmt(val, displayCur)}</p>
-                            <p style={{ margin: 0, fontSize: 11, color: gl >= 0 ? "#1D9E75" : "#D85A30" }}>{gl >= 0 ? "▲" : "▼"} {fmt(Math.abs(gl), displayCur)}</p>
-                          </div>
-                        </div>
-                      );
-                    })}
+            <div style={card}>
+              <p style={{fontWeight:500,fontSize:14,marginBottom:12}}>Top holdings</p>
+              {holdings.length===0?<p style={{color:"var(--t2)",fontSize:13}}>No holdings yet.</p>
+                :[...holdings].sort((a,b)=>cvt(b.currentPrice*b.quantity,b.currency)-cvt(a.currentPrice*a.quantity,a.currency)).slice(0,10).map((h,i)=>{
+                  const v=cvt(h.currentPrice*h.quantity,h.currency),c2=cvt(h.purchasePrice*h.quantity,h.currency),gl=v-c2;
+                  return(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,paddingBottom:8,borderBottom:"0.5px solid var(--b1)"}}>
+                      <div>
+                        <p style={{fontWeight:500,fontSize:13}}>{h.name}</p>
+                        <p style={{fontSize:11,color:"var(--t2)"}}>{h.type} · {h.tag}</p>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <p style={{fontWeight:500,fontSize:13}}>{fmt(v,dc)}</p>
+                        <p style={{fontSize:11,color:gl>=0?"#1D9E75":"#D85A30"}}>{gl>=0?"▲":"▼"} {fmt(Math.abs(gl),dc)}</p>
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         </div>
       )}
 
       {/* HOLDINGS */}
-      {tab === "holdings" && (
+      {tab==="holdings"&&(
         <div>
-          <div style={{ display: "flex", gap: 8, marginBottom: "1rem", flexWrap: "wrap", alignItems: "center" }}>
-            <select value={filterType} onChange={e => setFilterType(e.target.value)} style={{ fontSize: 13 }}>
-              <option value="All">All types</option>
-              {ASSET_TYPES.map(t => <option key={t}>{t}</option>)}
+          <div style={{display:"flex",gap:8,marginBottom:"1rem",flexWrap:"wrap",alignItems:"center"}}>
+            <select value={ftType} onChange={e=>setFtType(e.target.value)}>
+              <option value="All">All types</option>{ASSET_TYPES.map(t=><option key={t}>{t}</option>)}
             </select>
-            <select value={filterTag} onChange={e => setFilterTag(e.target.value)} style={{ fontSize: 13 }}>
-              <option value="All">All tags</option>
-              {TAGS.map(t => <option key={t}>{t}</option>)}
+            <select value={ftTag} onChange={e=>setFtTag(e.target.value)}>
+              <option value="All">All tags</option>{TAGS.map(t=><option key={t}>{t}</option>)}
             </select>
-            <div style={{ flex: 1 }} />
-            <button onClick={exportCSV} style={{ fontSize: 13, padding: "6px 14px" }}>⬇ Export CSV</button>
-            <button onClick={() => { setForm(EMPTY_H); setEditIdx(null); setShowAddH(true); }}
-              style={{ fontSize: 13, padding: "6px 14px", background: "var(--color-background-info)", color: "var(--color-text-info)", border: "0.5px solid var(--color-border-info)" }}>
+            <div style={{flex:1}}/>
+            <button onClick={exportCSV} style={{fontSize:13,padding:"6px 14px"}}>⬇ Export CSV</button>
+            <button onClick={()=>{setHForm(EMPTY_H);setEditIdx(null);setShowH(true);}}
+              style={{fontSize:13,padding:"6px 14px",background:"var(--bgi)",color:"var(--ti)",border:"0.5px solid var(--bi)"}}>
               + Add holding
             </button>
           </div>
-
-          {showAddH && (
-            <div style={{ ...cardStyle, border: "0.5px solid var(--color-border-secondary)", marginBottom: "1rem" }}>
-              <p style={{ margin: "0 0 12px", fontWeight: 500, fontSize: 14 }}>{editIdx !== null ? "Edit holding" : "New holding"}</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                {[["Name","name","text"],["Quantity","quantity","number"]].map(([label,key,type]) => (
-                  <div key={key}>
-                    <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>{label}</p>
-                    <input type={type} value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", fontSize: 13 }} />
-                  </div>
+          {showH&&(
+            <div style={{...card,border:"0.5px solid var(--b2)",marginBottom:"1rem"}}>
+              <p style={{fontWeight:500,fontSize:14,marginBottom:12}}>{editIdx!==null?"Edit holding":"New holding"}</p>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                {[["Name","name","text"],["Quantity","quantity","number"]].map(([l,k,t])=>(
+                  <div key={k}><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>{l}</p>
+                  <input type={t} value={hForm[k]} onChange={e=>setHForm(f=>({...f,[k]:e.target.value}))} style={{width:"100%"}}/></div>
                 ))}
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>Currency</p>
-                  <select value={form.currency} onChange={e => setForm(f => ({ ...f, currency: e.target.value }))} style={{ width: "100%", fontSize: 13 }}>
-                    {CURRENCIES.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>Asset type</p>
-                  <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))} style={{ width: "100%", fontSize: 13 }}>
-                    {ASSET_TYPES.map(t => <option key={t}>{t}</option>)}
-                  </select>
-                </div>
-                {[["Purchase price","purchasePrice"],["Current price","currentPrice"]].map(([label,key]) => (
-                  <div key={key}>
-                    <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>{label} ({form.currency})</p>
-                    <input type="number" value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", fontSize: 13 }} />
-                  </div>
+                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Currency</p>
+                  <select value={hForm.currency} onChange={e=>setHForm(f=>({...f,currency:e.target.value}))} style={{width:"100%"}}>
+                    {CURRENCIES.map(c=><option key={c}>{c}</option>)}</select></div>
+                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Asset type</p>
+                  <select value={hForm.type} onChange={e=>setHForm(f=>({...f,type:e.target.value}))} style={{width:"100%"}}>
+                    {ASSET_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
+                {[["Purchase price","purchasePrice"],["Current price","currentPrice"]].map(([l,k])=>(
+                  <div key={k}><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>{l} ({hForm.currency})</p>
+                  <input type="number" value={hForm[k]} onChange={e=>setHForm(f=>({...f,[k]:e.target.value}))} style={{width:"100%"}}/></div>
                 ))}
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>Tag</p>
-                  <select value={form.tag} onChange={e => setForm(f => ({ ...f, tag: e.target.value }))} style={{ width: "100%", fontSize: 13 }}>
-                    {TAGS.map(t => <option key={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>Note (optional)</p>
-                  <input type="text" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", fontSize: 13 }} />
-                </div>
+                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Tag</p>
+                  <select value={hForm.tag} onChange={e=>setHForm(f=>({...f,tag:e.target.value}))} style={{width:"100%"}}>
+                    {TAGS.map(t=><option key={t}>{t}</option>)}</select></div>
+                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Note (optional)</p>
+                  <input value={hForm.note} onChange={e=>setHForm(f=>({...f,note:e.target.value}))} style={{width:"100%"}}/></div>
               </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <button onClick={saveHolding} style={{ fontSize: 13, padding: "6px 16px", background: "var(--color-background-info)", color: "var(--color-text-info)", border: "0.5px solid var(--color-border-info)" }}>Save</button>
-                <button onClick={() => { setShowAddH(false); setEditIdx(null); }} style={{ fontSize: 13, padding: "6px 16px" }}>Cancel</button>
+              <div style={{display:"flex",gap:8,marginTop:12}}>
+                <button onClick={saveH} style={{fontSize:13,padding:"6px 16px",background:"var(--bgi)",color:"var(--ti)",border:"0.5px solid var(--bi)"}}>Save</button>
+                <button onClick={()=>{setShowH(false);setEditIdx(null);}} style={{fontSize:13,padding:"6px 16px"}}>Cancel</button>
               </div>
             </div>
           )}
-
-          {sortedHoldings.length === 0
-            ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>No holdings match the current filter.</p>
-            : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
-                      <th style={thStyle("name")} onClick={() => handleSort("name")}>Name{sortIcon("name")}</th>
-                      <th style={thStyle("type")} onClick={() => handleSort("type")}>Type{sortIcon("type")}</th>
-                      <th style={thStyle("tag")} onClick={() => handleSort("tag")}>Tag{sortIcon("tag")}</th>
-                      <th style={thStyle("qty")} onClick={() => handleSort("qty")}>Qty{sortIcon("qty")}</th>
-                      <th style={thStyle("value")} onClick={() => handleSort("value")}>Value{sortIcon("value")}</th>
-                      <th style={thStyle("share")} onClick={() => handleSort("share")}>Share%{sortIcon("share")}</th>
-                      <th style={thStyle("gl")} onClick={() => handleSort("gl")}>G/L{sortIcon("gl")}</th>
-                      <th style={thStyle("glp")} onClick={() => handleSort("glp")}>G/L%{sortIcon("glp")}</th>
-                      <th style={{ padding: "8px 6px" }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedHoldings.map((h, i) => {
-                      const origIdx = holdings.indexOf(h);
-                      const val = cvt(h.currentPrice * h.quantity, h.currency);
-                      const cost = cvt(h.purchasePrice * h.quantity, h.currency);
-                      const gl = val - cost;
-                      const glp = cost > 0 ? (gl / cost * 100) : 0;
-                      const share = totalValue > 0 ? (val / totalValue * 100) : 0;
-                      return (
-                        <tr key={i} style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
-                          <td style={{ padding: "8px 6px" }}>
-                            <p style={{ margin: 0, fontWeight: 500 }}>{h.name}</p>
-                            {h.note && <p style={{ margin: 0, fontSize: 11, color: "var(--color-text-secondary)" }}>{h.note}</p>}
-                          </td>
-                          <td style={{ padding: "8px 6px", textAlign: "right", color: "var(--color-text-secondary)" }}>{h.type}</td>
-                          <td style={{ padding: "8px 6px", textAlign: "right" }}>
-                            <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: "var(--border-radius-md)", background: "var(--color-background-secondary)", color: "var(--color-text-secondary)" }}>{h.tag}</span>
-                          </td>
-                          <td style={{ padding: "8px 6px", textAlign: "right" }}>{h.quantity}</td>
-                          <td style={{ padding: "8px 6px", textAlign: "right", fontWeight: 500 }}>{fmt(val, displayCur)}</td>
-                          <td style={{ padding: "8px 6px", textAlign: "right" }}>{share.toFixed(2)}%</td>
-                          <td style={{ padding: "8px 6px", textAlign: "right", color: gl >= 0 ? "#1D9E75" : "#D85A30" }}>{gl >= 0 ? "+" : ""}{fmt(gl, displayCur)}</td>
-                          <td style={{ padding: "8px 6px", textAlign: "right", color: glp >= 0 ? "#1D9E75" : "#D85A30" }}>{pct(glp)}</td>
-                          <td style={{ padding: "8px 6px", textAlign: "right", whiteSpace: "nowrap" }}>
-                            <button onClick={() => startEdit(origIdx)} style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", color: "var(--color-text-secondary)", fontSize: 15 }}>✎</button>
-                            <button onClick={() => setHoldings(p => p.filter((_, j) => j !== origIdx))} style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", color: "var(--color-text-secondary)", fontSize: 15 }}>🗑</button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+          {sorted.length===0?<p style={{color:"var(--t2)",fontSize:13}}>No holdings match the filter.</p>:(
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                <thead>
+                  <tr style={{borderBottom:"0.5px solid var(--b1)"}}>
+                    <th style={thS("name",true)} onClick={()=>sortH("name")}>Name{si("name")}</th>
+                    <th style={thS("type")} onClick={()=>sortH("type")}>Type{si("type")}</th>
+                    <th style={thS("tag")} onClick={()=>sortH("tag")}>Tag{si("tag")}</th>
+                    <th style={thS("qty")} onClick={()=>sortH("qty")}>Qty{si("qty")}</th>
+                    <th style={thS("value")} onClick={()=>sortH("value")}>Value{si("value")}</th>
+                    <th style={thS("share")} onClick={()=>sortH("share")}>Share%{si("share")}</th>
+                    <th style={thS("gl")} onClick={()=>sortH("gl")}>G/L{si("gl")}</th>
+                    <th style={thS("glp")} onClick={()=>sortH("glp")}>G/L%{si("glp")}</th>
+                    <th style={{padding:"8px 6px"}}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.map((h,i)=>{
+                    const oi=holdings.indexOf(h),v=cvt(h.currentPrice*h.quantity,h.currency),c2=cvt(h.purchasePrice*h.quantity,h.currency),gl=v-c2,glp=c2>0?(gl/c2*100):0,sh=tv>0?(v/tv*100):0;
+                    return(
+                      <tr key={i} style={{borderBottom:"0.5px solid var(--b1)"}}>
+                        <td style={{padding:"8px 6px"}}>
+                          <p style={{fontWeight:500}}>{h.name}</p>
+                          {h.note&&<p style={{fontSize:11,color:"var(--t2)"}}>{h.note}</p>}
+                        </td>
+                        <td style={{padding:"8px 6px",textAlign:"right",color:"var(--t2)"}}>{h.type}</td>
+                        <td style={{padding:"8px 6px",textAlign:"right"}}>
+                          <span style={{fontSize:11,padding:"2px 7px",borderRadius:"var(--r1)",background:"var(--bg2)",color:"var(--t2)"}}>{h.tag}</span>
+                        </td>
+                        <td style={{padding:"8px 6px",textAlign:"right"}}>{h.quantity}</td>
+                        <td style={{padding:"8px 6px",textAlign:"right",fontWeight:500}}>{fmt(v,dc)}</td>
+                        <td style={{padding:"8px 6px",textAlign:"right"}}>{sh.toFixed(2)}%</td>
+                        <td style={{padding:"8px 6px",textAlign:"right",color:gl>=0?"#1D9E75":"#D85A30"}}>{gl>=0?"+":""}{fmt(gl,dc)}</td>
+                        <td style={{padding:"8px 6px",textAlign:"right",color:glp>=0?"#1D9E75":"#D85A30"}}>{pct(glp)}</td>
+                        <td style={{padding:"8px 6px",textAlign:"right",whiteSpace:"nowrap"}}>
+                          <button onClick={()=>startEdit(oi)} style={{background:"none",border:"none",padding:"2px 4px",color:"var(--t2)",fontSize:15}}>✎</button>
+                          <button onClick={()=>setHoldings(p=>p.filter((_,j)=>j!==oi))} style={{background:"none",border:"none",padding:"2px 4px",color:"var(--t2)",fontSize:15}}>🗑</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
       {/* TRANSACTIONS */}
-      {tab === "transactions" && (
+      {tab==="transactions"&&(
         <div>
-          <div style={{ display: "flex", gap: 8, marginBottom: "1rem", flexWrap: "wrap", alignItems: "center" }}>
-            <select value={txFilterType} onChange={e => setTxFilterType(e.target.value)} style={{ fontSize: 13 }}>
-              <option value="All">All types</option>
-              {ASSET_TYPES.map(t => <option key={t}>{t}</option>)}
+          <div style={{display:"flex",gap:8,marginBottom:"1rem",flexWrap:"wrap",alignItems:"center"}}>
+            <select value={txFt} onChange={e=>setTxFt(e.target.value)}>
+              <option value="All">All types</option>{ASSET_TYPES.map(t=><option key={t}>{t}</option>)}
             </select>
-            <div style={{ flex: 1 }} />
-            <button onClick={exportTxCSV} style={{ fontSize: 13, padding: "6px 14px" }}>⬇ Export CSV</button>
-            <button onClick={() => setShowAddTx(true)}
-              style={{ fontSize: 13, padding: "6px 14px", background: "var(--color-background-info)", color: "var(--color-text-info)", border: "0.5px solid var(--color-border-info)" }}>
+            <div style={{flex:1}}/>
+            <button onClick={exportTxCSV} style={{fontSize:13,padding:"6px 14px"}}>⬇ Export CSV</button>
+            <button onClick={()=>setShowTx(true)}
+              style={{fontSize:13,padding:"6px 14px",background:"var(--bgi)",color:"var(--ti)",border:"0.5px solid var(--bi)"}}>
               + New transaction
             </button>
           </div>
-
-          {showAddTx && (
-            <div style={{ ...cardStyle, border: "0.5px solid var(--color-border-secondary)", marginBottom: "1rem" }}>
-              <p style={{ margin: "0 0 12px", fontWeight: 500, fontSize: 14 }}>New transaction</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>Transaction type</p>
-                  <select value={txForm.type} onChange={e => setTxForm(f => ({ ...f, type: e.target.value }))} style={{ width: "100%", fontSize: 13 }}>
-                    <option value="BUY">BUY</option>
-                    <option value="SELL">SELL</option>
-                  </select>
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>Asset name</p>
-                  <input value={txForm.assetName} onChange={e => setTxForm(f => ({ ...f, assetName: e.target.value }))}
-                    list="holding-names" style={{ width: "100%", boxSizing: "border-box", fontSize: 13 }} />
-                  <datalist id="holding-names">{holdings.map(h => <option key={h.name} value={h.name} />)}</datalist>
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>Asset type</p>
-                  <select value={txForm.assetType} onChange={e => setTxForm(f => ({ ...f, assetType: e.target.value }))} style={{ width: "100%", fontSize: 13 }}>
-                    {ASSET_TYPES.map(t => <option key={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>Currency</p>
-                  <select value={txForm.currency} onChange={e => setTxForm(f => ({ ...f, currency: e.target.value }))} style={{ width: "100%", fontSize: 13 }}>
-                    {CURRENCIES.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>Price per unit ({txForm.currency})</p>
-                  <input type="number" value={txForm.price} onChange={e => setTxForm(f => ({ ...f, price: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", fontSize: 13 }} />
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>Quantity</p>
-                  <input type="number" value={txForm.quantity} onChange={e => setTxForm(f => ({ ...f, quantity: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", fontSize: 13 }} />
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>Tag</p>
-                  <select value={txForm.tag} onChange={e => setTxForm(f => ({ ...f, tag: e.target.value }))} style={{ width: "100%", fontSize: 13 }}>
-                    {TAGS.map(t => <option key={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>Note (optional)</p>
-                  <input type="text" value={txForm.note} onChange={e => setTxForm(f => ({ ...f, note: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", fontSize: 13 }} />
-                </div>
+          {showTx&&(
+            <div style={{...card,border:"0.5px solid var(--b2)",marginBottom:"1rem"}}>
+              <p style={{fontWeight:500,fontSize:14,marginBottom:12}}>New transaction</p>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Transaction type</p>
+                  <select value={txForm.type} onChange={e=>setTxForm(f=>({...f,type:e.target.value}))} style={{width:"100%"}}>
+                    <option value="BUY">BUY</option><option value="SELL">SELL</option></select></div>
+                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Asset name</p>
+                  <input value={txForm.assetName} onChange={e=>setTxForm(f=>({...f,assetName:e.target.value}))}
+                    list="hnames" style={{width:"100%"}}/>
+                  <datalist id="hnames">{holdings.map(h=><option key={h.name} value={h.name}/>)}</datalist></div>
+                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Asset type</p>
+                  <select value={txForm.assetType} onChange={e=>setTxForm(f=>({...f,assetType:e.target.value}))} style={{width:"100%"}}>
+                    {ASSET_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
+                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Currency</p>
+                  <select value={txForm.currency} onChange={e=>setTxForm(f=>({...f,currency:e.target.value}))} style={{width:"100%"}}>
+                    {CURRENCIES.map(c=><option key={c}>{c}</option>)}</select></div>
+                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Price per unit ({txForm.currency})</p>
+                  <input type="number" value={txForm.price} onChange={e=>setTxForm(f=>({...f,price:e.target.value}))} style={{width:"100%"}}/></div>
+                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Quantity</p>
+                  <input type="number" value={txForm.quantity} onChange={e=>setTxForm(f=>({...f,quantity:e.target.value}))} style={{width:"100%"}}/></div>
+                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Tag</p>
+                  <select value={txForm.tag} onChange={e=>setTxForm(f=>({...f,tag:e.target.value}))} style={{width:"100%"}}>
+                    {TAGS.map(t=><option key={t}>{t}</option>)}</select></div>
+                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Note (optional)</p>
+                  <input value={txForm.note} onChange={e=>setTxForm(f=>({...f,note:e.target.value}))} style={{width:"100%"}}/></div>
               </div>
-              {txForm.price && txForm.quantity && (
-                <div style={{ marginTop: 10, padding: "8px 12px", background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", fontSize: 13 }}>
-                  Total: <strong>{fmt(parseFloat(txForm.price||0) * parseFloat(txForm.quantity||0), txForm.currency)}</strong>
+              {txForm.price&&txForm.quantity&&(
+                <div style={{marginTop:10,padding:"8px 12px",background:"var(--bg2)",borderRadius:"var(--r1)",fontSize:13}}>
+                  Total: <strong>{fmt(parseFloat(txForm.price||0)*parseFloat(txForm.quantity||0),txForm.currency)}</strong>
                 </div>
               )}
-              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <button onClick={commitTransaction}
-                  style={{ fontSize: 13, padding: "6px 16px", background: txForm.type === "BUY" ? "var(--color-background-info)" : "rgba(216,90,48,0.12)",
-                    color: txForm.type === "BUY" ? "var(--color-text-info)" : "#D85A30",
-                    border: `0.5px solid ${txForm.type === "BUY" ? "var(--color-border-info)" : "#D85A30"}` }}>
+              <div style={{display:"flex",gap:8,marginTop:12}}>
+                <button onClick={commitTx} style={{fontSize:13,padding:"6px 16px",
+                  background:txForm.type==="BUY"?"var(--bgi)":"rgba(216,90,48,0.12)",
+                  color:txForm.type==="BUY"?"var(--ti)":"#D85A30",
+                  border:`0.5px solid ${txForm.type==="BUY"?"var(--bi)":"#D85A30"}`}}>
                   Confirm {txForm.type}
                 </button>
-                <button onClick={() => setShowAddTx(false)} style={{ fontSize: 13, padding: "6px 16px" }}>Cancel</button>
+                <button onClick={()=>setShowTx(false)} style={{fontSize:13,padding:"6px 16px"}}>Cancel</button>
               </div>
             </div>
           )}
-
-          {sortedTx.length === 0
-            ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>No transactions yet. Use "New transaction" to record a buy or sell.</p>
-            : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
-                      <th style={txThStyle("timestamp")} onClick={() => handleTxSort("timestamp")}>Date / Time{txSortIcon("timestamp")}</th>
-                      <th style={txThStyle("type")} onClick={() => handleTxSort("type")}>Type{txSortIcon("type")}</th>
-                      <th style={txThStyle("assetName")} onClick={() => handleTxSort("assetName")}>Asset{txSortIcon("assetName")}</th>
-                      <th style={txThStyle("assetType")} onClick={() => handleTxSort("assetType")}>Category{txSortIcon("assetType")}</th>
-                      <th style={txThStyle("price")} onClick={() => handleTxSort("price")}>Price{txSortIcon("price")}</th>
-                      <th style={txThStyle("quantity")} onClick={() => handleTxSort("quantity")}>Qty{txSortIcon("quantity")}</th>
-                      <th style={txThStyle("total")} onClick={() => handleTxSort("total")}>Total{txSortIcon("total")}</th>
-                      <th style={{ padding: "8px 6px", color: "var(--color-text-secondary)", fontWeight: 500 }}>Note</th>
+          {sortedTx.length===0?<p style={{color:"var(--t2)",fontSize:13}}>No transactions yet. Use "New transaction" to record a buy or sell.</p>:(
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                <thead>
+                  <tr style={{borderBottom:"0.5px solid var(--b1)"}}>
+                    <th style={txThS("timestamp",true)} onClick={()=>sortTx("timestamp")}>Date / Time{tsi("timestamp")}</th>
+                    <th style={txThS("type")} onClick={()=>sortTx("type")}>Type{tsi("type")}</th>
+                    <th style={txThS("assetName",true)} onClick={()=>sortTx("assetName")}>Asset{tsi("assetName")}</th>
+                    <th style={txThS("assetType")} onClick={()=>sortTx("assetType")}>Category{tsi("assetType")}</th>
+                    <th style={txThS("price")} onClick={()=>sortTx("price")}>Price{tsi("price")}</th>
+                    <th style={txThS("quantity")} onClick={()=>sortTx("quantity")}>Qty{tsi("quantity")}</th>
+                    <th style={txThS("total")} onClick={()=>sortTx("total")}>Total{tsi("total")}</th>
+                    <th style={{padding:"8px 6px",color:"var(--t2)"}}>Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedTx.map((t,i)=>(
+                    <tr key={t.id||i} style={{borderBottom:"0.5px solid var(--b1)"}}>
+                      <td style={{padding:"8px 6px",fontSize:12,color:"var(--t2)",whiteSpace:"nowrap"}}>{new Date(t.timestamp).toLocaleString()}</td>
+                      <td style={{padding:"8px 6px",textAlign:"right"}}>
+                        <span style={{fontSize:11,padding:"2px 8px",borderRadius:"var(--r1)",fontWeight:500,
+                          background:t.type==="BUY"?"rgba(55,138,221,0.12)":"rgba(216,90,48,0.12)",
+                          color:t.type==="BUY"?"#378ADD":"#D85A30"}}>{t.type}</span>
+                      </td>
+                      <td style={{padding:"8px 6px",fontWeight:500}}>{t.assetName}</td>
+                      <td style={{padding:"8px 6px",textAlign:"right",color:"var(--t2)"}}>{t.assetType}</td>
+                      <td style={{padding:"8px 6px",textAlign:"right"}}>{fmt(t.price,t.currency)}</td>
+                      <td style={{padding:"8px 6px",textAlign:"right"}}>{t.quantity}</td>
+                      <td style={{padding:"8px 6px",textAlign:"right",fontWeight:500}}>{fmt(t.price*t.quantity,t.currency)}</td>
+                      <td style={{padding:"8px 6px",fontSize:12,color:"var(--t2)"}}>{t.note||"—"}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {sortedTx.map((t, i) => (
-                      <tr key={t.id || i} style={{ borderBottom: "0.5px solid var(--color-border-tertiary)" }}>
-                        <td style={{ padding: "8px 6px", fontSize: 12, color: "var(--color-text-secondary)", whiteSpace: "nowrap" }}>
-                          {new Date(t.timestamp).toLocaleString()}
-                        </td>
-                        <td style={{ padding: "8px 6px", textAlign: "right" }}>
-                          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: "var(--border-radius-md)", fontWeight: 500,
-                            background: t.type === "BUY" ? "rgba(55,138,221,0.12)" : "rgba(216,90,48,0.12)",
-                            color: t.type === "BUY" ? "#378ADD" : "#D85A30" }}>
-                            {t.type}
-                          </span>
-                        </td>
-                        <td style={{ padding: "8px 6px", fontWeight: 500 }}>{t.assetName}</td>
-                        <td style={{ padding: "8px 6px", textAlign: "right", color: "var(--color-text-secondary)" }}>{t.assetType}</td>
-                        <td style={{ padding: "8px 6px", textAlign: "right" }}>{fmt(t.price, t.currency)}</td>
-                        <td style={{ padding: "8px 6px", textAlign: "right" }}>{t.quantity}</td>
-                        <td style={{ padding: "8px 6px", textAlign: "right", fontWeight: 500 }}>{fmt(t.price * t.quantity, t.currency)}</td>
-                        <td style={{ padding: "8px 6px", fontSize: 12, color: "var(--color-text-secondary)" }}>{t.note || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
       {/* GOALS */}
-      {tab === "goals" && (
+      {tab==="goals"&&(
         <div>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "1rem" }}>
-            <button onClick={() => setShowAddG(true)}
-              style={{ fontSize: 13, padding: "6px 14px", background: "var(--color-background-info)", color: "var(--color-text-info)", border: "0.5px solid var(--color-border-info)" }}>
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"1rem"}}>
+            <button onClick={()=>setShowG(true)}
+              style={{fontSize:13,padding:"6px 14px",background:"var(--bgi)",color:"var(--ti)",border:"0.5px solid var(--bi)"}}>
               + Add goal
             </button>
           </div>
-
-          {showAddG && (
-            <div style={{ ...cardStyle, border: "0.5px solid var(--color-border-secondary)", marginBottom: "1rem" }}>
-              <p style={{ margin: "0 0 12px", fontWeight: 500, fontSize: 14 }}>New goal</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>Goal name</p>
-                  <input value={goalForm.name} onChange={e => setGoalForm(f => ({ ...f, name: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", fontSize: 13 }} />
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>Target amount</p>
-                  <input type="number" value={goalForm.target} onChange={e => setGoalForm(f => ({ ...f, target: e.target.value }))} style={{ width: "100%", boxSizing: "border-box", fontSize: 13 }} />
-                </div>
-                <div>
-                  <p style={{ margin: "0 0 3px", fontSize: 12, color: "var(--color-text-secondary)" }}>Currency</p>
-                  <select value={goalForm.currency} onChange={e => setGoalForm(f => ({ ...f, currency: e.target.value }))} style={{ width: "100%", fontSize: 13 }}>
-                    {CURRENCIES.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
+          {showG&&(
+            <div style={{...card,border:"0.5px solid var(--b2)",marginBottom:"1rem"}}>
+              <p style={{fontWeight:500,fontSize:14,marginBottom:12}}>New goal</p>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Goal name</p>
+                  <input value={gForm.name} onChange={e=>setGForm(f=>({...f,name:e.target.value}))} style={{width:"100%"}}/></div>
+                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Target amount</p>
+                  <input type="number" value={gForm.target} onChange={e=>setGForm(f=>({...f,target:e.target.value}))} style={{width:"100%"}}/></div>
+                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Currency</p>
+                  <select value={gForm.currency} onChange={e=>setGForm(f=>({...f,currency:e.target.value}))} style={{width:"100%"}}>
+                    {CURRENCIES.map(c=><option key={c}>{c}</option>)}</select></div>
               </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <button onClick={saveGoal} style={{ fontSize: 13, padding: "6px 16px", background: "var(--color-background-info)", color: "var(--color-text-info)", border: "0.5px solid var(--color-border-info)" }}>Save</button>
-                <button onClick={() => setShowAddG(false)} style={{ fontSize: 13, padding: "6px 16px" }}>Cancel</button>
+              <div style={{display:"flex",gap:8,marginTop:12}}>
+                <button onClick={saveG} style={{fontSize:13,padding:"6px 16px",background:"var(--bgi)",color:"var(--ti)",border:"0.5px solid var(--bi)"}}>Save</button>
+                <button onClick={()=>setShowG(false)} style={{fontSize:13,padding:"6px 16px"}}>Cancel</button>
               </div>
             </div>
           )}
-
-          {goals.length === 0
-            ? <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>No goals yet. Set a financial target to track your progress.</p>
-            : goals.map((g, i) => {
-              const cur = cvt(totalValue, "USD");
-              const tgt = g.currency === displayCur ? g.target : cvt(g.target, g.currency);
-              return (
-                <div key={i} style={{ ...cardStyle, marginBottom: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {goals.length===0?<p style={{color:"var(--t2)",fontSize:13}}>No goals yet.</p>
+            :goals.map((g,i)=>{
+              const cur=cvt(tv,"USD"),tgt=g.currency===dc?g.target:cvt(g.target,g.currency);
+              return(
+                <div key={i} style={{...card,marginBottom:12}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <div>
-                      <p style={{ margin: 0, fontWeight: 500 }}>{g.name}</p>
-                      <p style={{ margin: 0, fontSize: 12, color: "var(--color-text-secondary)" }}>Target in {g.currency}</p>
+                      <p style={{fontWeight:500}}>{g.name}</p>
+                      <p style={{fontSize:12,color:"var(--t2)"}}>Target in {g.currency}</p>
                     </div>
-                    <button onClick={() => setGoals(p => p.filter((_, j) => j !== i))}
-                      style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-text-secondary)", fontSize: 15 }}>🗑</button>
+                    <button onClick={()=>setGoals(p=>p.filter((_,j)=>j!==i))}
+                      style={{background:"none",border:"none",color:"var(--t2)",fontSize:15}}>🗑</button>
                   </div>
-                  <ProgressBar current={cur} target={tgt} currency={displayCur} />
+                  <Bar current={cur} target={tgt} currency={dc}/>
                 </div>
               );
             })}
-
-          <div style={{ marginTop: "1.5rem", padding: "1rem", background: "var(--color-background-secondary)", borderRadius: "var(--border-radius-md)", fontSize: 12, color: "var(--color-text-secondary)" }}>
-            ℹ Goal progress is based on total portfolio value ({fmt(totalValue, displayCur)}). Exchange rate: 1 USD = 4.000 MYR.
+          <div style={{marginTop:"1.5rem",padding:"1rem",background:"var(--bg2)",borderRadius:"var(--r1)",fontSize:12,color:"var(--t2)"}}>
+            ℹ Goal progress is based on total portfolio value ({fmt(tv,dc)}). Exchange rate: 1 USD = 4.000 MYR.
           </div>
         </div>
       )}
     </div>
   );
 }
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
