@@ -9,80 +9,144 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg1:#ffffff;--bg2:#f5f5f3;--bg3:#eeede8;
-  --bgi:rgba(230,241,251,1);--bgd:rgba(252,235,235,1);
-  --t1:#1a1a18;--t2:#6b6b67;--t3:#9b9b97;
-  --ti:#185fa5;--ts:#3b6d11;--td:#a32d2d;
-  --b1:rgba(0,0,0,0.15);--b2:rgba(0,0,0,0.25);--bi:rgba(24,95,165,0.35);
-  --r1:8px;--r2:12px;
-  --font:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif
-}
-@media(prefers-color-scheme:dark){:root{
-  --bg1:#1e1e1c;--bg2:#2a2a28;--bg3:#242422;
-  --bgi:rgba(12,46,74,1);--bgd:rgba(46,16,16,1);
-  --t1:#f0efe8;--t2:#a0a09a;--t3:#6b6b67;
-  --ti:#85b7eb;--ts:#97c459;--td:#f09595;
-  --b1:rgba(255,255,255,0.12);--b2:rgba(255,255,255,0.22);--bi:rgba(133,183,235,0.3)
-}}
-body{font-family:var(--font);color:var(--t1);background:var(--bg3);min-height:100vh}
-#root{max-width:820px;margin:0 auto;padding:1.5rem 1rem}
-input,select{font-family:var(--font);font-size:13px;color:var(--t1);background:var(--bg1);
-  border:0.5px solid var(--b2);border-radius:var(--r1);padding:7px 10px;outline:none;transition:border-color .15s}
-input:focus,select:focus{border-color:var(--ti);box-shadow:0 0 0 2px var(--bgi)}
-button{font-family:var(--font);cursor:pointer;border-radius:var(--r1);border:0.5px solid var(--b2);
-  background:transparent;color:var(--t1);transition:background .15s,transform .1s}
-button:hover{background:var(--bg2)}
-button:active{transform:scale(0.98)}
-th{font-weight:500}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0a0a0a;color:#fff;min-height:100vh}
+#root{max-width:900px;margin:0 auto;padding:1.5rem 1rem}
+input,select{font-family:inherit;font-size:13px;color:#fff;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:8px 12px;outline:none;transition:border-color .15s}
+input:focus,select:focus{border-color:rgb(50,215,45)}
+button{font-family:inherit;cursor:pointer;transition:opacity .15s}
+button:active{opacity:0.75}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
-<div id="root"><p style="padding:2rem;color:#999">Loading dashboard…</p></div>
+<div id="root"><p style="padding:2rem;color:#666">Loading…</p></div>
 <script type="text/babel">
-const {useState,useEffect}=React;
+const {useState,useEffect,useRef,useCallback}=React;
 const CURRENCIES=["USD","MYR"];
 const ASSET_TYPES=["Stocks","Crypto","ETF/Funds","Real Estate","Cash","Bonds","Provident Fund","Other"];
 const TAGS=["Growth","Dividend","Emergency Fund","Speculative","Stable","Retirement","Short-term"];
-const MYR_RATE=4.000;
-const SK="pfDash_v2";
-
-const toUSD=(a,c)=>c==="MYR"?a/MYR_RATE:a;
-const fmt=(n,c="USD")=>(c==="USD"?"$":"RM")+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+const DEFAULT_MYR=4.000;
+const SK="pfDashV5";
+const FINNHUB_KEY="d868ovhr01qnvdehfuhgd868ovhr01qnvdehfui0";
+const GREEN="rgb(50,215,45)";
+const GREEN_DIM="rgba(50,215,45,0.12)";
+const GREEN_BORDER="rgba(50,215,45,0.35)";
+const RED="#ff453a";
+const BLUE="#0A84FF";
+const S={bg:"#0a0a0a",card:"#111",cardBorder:"#1e1e1e",text:"#fff",textDim:"#888",textFaint:"#333",input:"#1a1a1a",inputBorder:"#2a2a2a"};
+const card={background:S.card,border:`1px solid ${S.cardBorder}`,borderRadius:12,padding:"1.25rem"};
+const iS={background:S.input,border:`1px solid ${S.inputBorder}`,borderRadius:8,padding:"8px 12px",fontSize:13,color:S.text,width:"100%",boxSizing:"border-box",outline:"none",fontFamily:"inherit"};
+const bP={background:GREEN_DIM,color:GREEN,border:`1px solid ${GREEN_BORDER}`,borderRadius:8,padding:"7px 16px",fontSize:13,cursor:"pointer",fontFamily:"inherit",fontWeight:500};
+const bG={background:"transparent",color:S.textDim,border:`1px solid ${S.inputBorder}`,borderRadius:8,padding:"7px 16px",fontSize:13,cursor:"pointer",fontFamily:"inherit"};
+const bD={background:"rgba(255,69,58,0.1)",color:RED,border:"1px solid rgba(255,69,58,0.3)",borderRadius:8,padding:"7px 16px",fontSize:13,cursor:"pointer",fontFamily:"inherit"};
+const toUSD=(a,c)=>c==="MYR"?a/DEFAULT_MYR:a;
+const fmt=(n,c="USD")=>(c==="USD"?"$":"RM")+Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
 const pct=n=>(n>=0?"+":"")+n.toFixed(2)+"%";
-const EMPTY_H={name:"",type:"Stocks",currency:"USD",purchasePrice:"",currentPrice:"",quantity:"",tag:"Growth",note:""};
-const COLORS=["#378ADD","#1D9E75","#D85A30","#D4537E","#BA7517","#7F77DD","#639922","#E08A3C"];
+const COLORS=["#32D72D","#0A84FF","#FF9F0A","#FF453A","#BF5AF2","#64D2FF","#FFD60A","#30D158"];
+const EMPTY_H={name:"",type:"Stocks",currency:"USD",purchasePrice:"",currentPrice:"",quantity:"",tag:"Growth",note:"",ticker:""};
+const EMPTY_Y={assetName:"",principal:"",currency:"USD",apr:"",durationDays:"",startDate:new Date().toISOString().slice(0,10),rewardAsset:"",rewardAssetType:"Crypto",rewardCurrency:"USD",tag:"Growth",note:""};
 
-function PieChart({data}){
-  const sz=200,cx=100,cy=100,r=72,ir=40;
-  let angle=-Math.PI/2;
+function Lbl({children}){return <p style={{margin:"0 0 5px",fontSize:11,color:S.textDim,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:500}}>{children}</p>;}
+
+function Pie({data}){
+  const sz=180,cx=90,cy=90,r=65,ir=36;let angle=-Math.PI/2;
   const total=data.reduce((s,d)=>s+d.value,0);
-  if(!total)return React.createElement("div",{style:{textAlign:"center",color:"var(--t2)",fontSize:13,padding:"2rem"}},"No holdings yet");
-  const slices=data.map((d,i)=>{
-    const a=(d.value/total)*2*Math.PI;
-    const x1=cx+r*Math.cos(angle),y1=cy+r*Math.sin(angle);
-    const x2=cx+r*Math.cos(angle+a),y2=cy+r*Math.sin(angle+a);
-    const xi1=cx+ir*Math.cos(angle),yi1=cy+ir*Math.sin(angle);
-    const xi2=cx+ir*Math.cos(angle+a),yi2=cy+ir*Math.sin(angle+a);
-    const lg=a>Math.PI?1:0;
-    const p=`M${xi1},${yi1}L${x1},${y1}A${r},${r} 0 ${lg} 1 ${x2},${y2}L${xi2},${yi2}A${ir},${ir} 0 ${lg} 0 ${xi1},${yi1}Z`;
-    angle+=a;
-    return <path key={i} d={p} fill={COLORS[i%COLORS.length]}/>;
-  });
-  return <svg viewBox={`0 0 ${sz} ${sz}`} width={sz} height={sz}>{slices}</svg>;
+  if(!total) return <div style={{textAlign:"center",color:S.textDim,fontSize:13,padding:"2rem"}}>No holdings</div>;
+  return(
+    <svg viewBox={`0 0 ${sz} ${sz}`} width={sz} height={sz}>
+      {data.map((d,i)=>{
+        const a=(d.value/total)*2*Math.PI;
+        const x1=cx+r*Math.cos(angle),y1=cy+r*Math.sin(angle),x2=cx+r*Math.cos(angle+a),y2=cy+r*Math.sin(angle+a);
+        const xi1=cx+ir*Math.cos(angle),yi1=cy+ir*Math.sin(angle),xi2=cx+ir*Math.cos(angle+a),yi2=cy+ir*Math.sin(angle+a);
+        const lg=a>Math.PI?1:0;
+        const p=`M${xi1},${yi1}L${x1},${y1}A${r},${r} 0 ${lg} 1 ${x2},${y2}L${xi2},${yi2}A${ir},${ir} 0 ${lg} 0 ${xi1},${yi1}Z`;
+        angle+=a;
+        return <path key={i} d={p} fill={COLORS[i%COLORS.length]}/>;
+      })}
+      <circle cx={cx} cy={cy} r={ir-1} fill={S.card}/>
+    </svg>
+  );
 }
 
-function Bar({current,target,currency}){
-  const p=Math.min((current/target)*100,100);
+function LineGraph({holdings,transactions}){
+  const [range,setRange]=useState("30D");
+  const ref=useRef(null);
+  const ranges=["7D","30D","3M","6M","1Y","ALL"];
+  const getPts=useCallback(()=>{
+    const now=new Date();
+    const days=range==="7D"?7:range==="30D"?30:range==="3M"?90:range==="6M"?180:range==="1Y"?365:730;
+    const pts=[];
+    for(let i=days;i>=0;i--){
+      const d=new Date(now);d.setDate(d.getDate()-i);
+      const ds=d.toISOString().slice(0,10);
+      let val=0;const hc={};
+      transactions.filter(t=>t.timestamp&&t.timestamp.slice(0,10)<=ds).forEach(t=>{
+        const k=t.assetName+"_"+t.currency;
+        if(!hc[k]) hc[k]={qty:0,price:t.price};
+        if(t.type==="BUY"||t.type==="YIELD") hc[k].qty+=t.quantity;
+        else if(t.type==="SELL") hc[k].qty=Math.max(0,hc[k].qty-t.quantity);
+        hc[k].price=t.price;
+      });
+      if(Object.keys(hc).length===0) holdings.forEach(h=>{val+=toUSD(h.currentPrice*h.quantity,h.currency);});
+      else Object.values(hc).forEach(h=>{val+=toUSD(h.price*h.qty,"USD");});
+      pts.push({date:ds,value:val});
+    }
+    return pts;
+  },[range,holdings,transactions]);
+
+  useEffect(()=>{
+    const canvas=ref.current;if(!canvas) return;
+    const ctx=canvas.getContext("2d");
+    const dpr=window.devicePixelRatio||1;
+    const W=canvas.offsetWidth,H=canvas.offsetHeight;
+    canvas.width=W*dpr;canvas.height=H*dpr;ctx.scale(dpr,dpr);
+    ctx.clearRect(0,0,W,H);
+    const pts=getPts();if(!pts.length) return;
+    const vals=pts.map(p=>p.value);
+    const minV=Math.min(...vals),maxV=Math.max(...vals);
+    const pad={top:20,bottom:30,left:58,right:16};
+    const gW=W-pad.left-pad.right,gH=H-pad.top-pad.bottom;
+    const xOf=i=>pad.left+(i/(pts.length-1))*gW;
+    const yOf=v=>pad.top+(maxV===minV?gH/2:(1-(v-minV)/(maxV-minV))*gH);
+    ctx.strokeStyle=S.cardBorder;ctx.lineWidth=1;
+    for(let j=0;j<=4;j++){
+      const y=pad.top+(j/4)*gH;
+      ctx.beginPath();ctx.moveTo(pad.left,y);ctx.lineTo(W-pad.right,y);ctx.stroke();
+      const v=maxV-(j/4)*(maxV-minV);
+      ctx.fillStyle=S.textDim;ctx.font="10px -apple-system,sans-serif";ctx.textAlign="right";
+      ctx.fillText("$"+(v>=1000?(v/1000).toFixed(1)+"k":v.toFixed(0)),pad.left-6,y+4);
+    }
+    const grad=ctx.createLinearGradient(0,pad.top,0,pad.top+gH);
+    grad.addColorStop(0,"rgba(50,215,45,0.2)");grad.addColorStop(1,"rgba(50,215,45,0)");
+    ctx.beginPath();ctx.moveTo(xOf(0),yOf(pts[0].value));
+    pts.forEach((p,i)=>{if(i>0) ctx.lineTo(xOf(i),yOf(p.value));});
+    ctx.lineTo(xOf(pts.length-1),pad.top+gH);ctx.lineTo(xOf(0),pad.top+gH);
+    ctx.closePath();ctx.fillStyle=grad;ctx.fill();
+    ctx.beginPath();ctx.moveTo(xOf(0),yOf(pts[0].value));
+    pts.forEach((p,i)=>{if(i>0) ctx.lineTo(xOf(i),yOf(p.value));});
+    ctx.strokeStyle=GREEN;ctx.lineWidth=2;ctx.lineJoin="round";ctx.stroke();
+    const step=Math.ceil(pts.length/6);
+    pts.forEach((p,i)=>{
+      if(i%step===0||i===pts.length-1){
+        ctx.fillStyle=S.textDim;ctx.font="10px -apple-system,sans-serif";ctx.textAlign="center";
+        ctx.fillText(new Date(p.date).toLocaleDateString("en-US",{month:"short",day:"numeric"}),xOf(i),H-8);
+      }
+    });
+  },[getPts]);
+
+  const total=holdings.reduce((s,h)=>s+toUSD(h.currentPrice*h.quantity,h.currency),0);
   return(
-    <div style={{marginTop:6}}>
-      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"var(--t2)",marginBottom:4}}>
-        <span>{fmt(current,currency)}</span><span>{p.toFixed(1)}%</span>
+    <div style={{...card,marginBottom:16}}>
+      <div style={{marginBottom:12}}>
+        <p style={{margin:0,fontSize:11,color:S.textDim,textTransform:"uppercase",letterSpacing:"0.06em"}}>Portfolio Value</p>
+        <p style={{margin:"2px 0 0",fontSize:22,fontWeight:700}}>${total.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</p>
       </div>
-      <div style={{height:8,background:"var(--bg2)",borderRadius:99,overflow:"hidden"}}>
-        <div style={{width:p+"%",height:"100%",background:p>=100?"#1D9E75":"#378ADD",borderRadius:99,transition:"width .4s"}}/>
+      <canvas ref={ref} style={{width:"100%",height:180,display:"block"}}/>
+      <div style={{display:"flex",justifyContent:"center",gap:4,marginTop:12}}>
+        {ranges.map(r=>(
+          <button key={r} onClick={()=>setRange(r)} style={{...bG,padding:"4px 12px",fontSize:12,background:range===r?GREEN_DIM:"transparent",color:range===r?GREEN:S.textDim,border:`1px solid ${range===r?GREEN_BORDER:S.inputBorder}`}}>{r}</button>
+        ))}
       </div>
-      <div style={{textAlign:"right",fontSize:12,color:"var(--t2)",marginTop:4}}>Target: {fmt(target,currency)}</div>
     </div>
   );
 }
@@ -92,174 +156,250 @@ function App(){
   const [holdings,setHoldings]=useState([]);
   const [goals,setGoals]=useState([]);
   const [txs,setTxs]=useState([]);
+  const [yields,setYields]=useState([]);
   const [showH,setShowH]=useState(false);
   const [showG,setShowG]=useState(false);
   const [showTx,setShowTx]=useState(false);
+  const [showY,setShowY]=useState(false);
   const [hForm,setHForm]=useState(EMPTY_H);
   const [gForm,setGForm]=useState({name:"",target:"",currency:"USD"});
   const [txForm,setTxForm]=useState({type:"BUY",assetName:"",assetType:"Stocks",currency:"USD",price:"",quantity:"",tag:"Growth",note:""});
+  const [yForm,setYForm]=useState(EMPTY_Y);
   const [ftType,setFtType]=useState("All");
   const [ftTag,setFtTag]=useState("All");
   const [txFt,setTxFt]=useState("All");
   const [dc,setDc]=useState("USD");
   const [editIdx,setEditIdx]=useState(null);
+  const [editTxIdx,setEditTxIdx]=useState(null);
   const [sCol,setSCol]=useState(null);
   const [sDir,setSDir]=useState("desc");
   const [txSCol,setTxSCol]=useState("timestamp");
   const [txSDir,setTxSDir]=useState("desc");
+  const [txSub,setTxSub]=useState("manual");
+  const [myrRate,setMyrRate]=useState(DEFAULT_MYR);
+  const [rateUpdated,setRateUpdated]=useState(null);
+  const [refreshing,setRefreshing]=useState(false);
+  const [lastRefresh,setLastRefresh]=useState(null);
+  const [priceChanges,setPriceChanges]=useState({});
 
   useEffect(()=>{
-    try{const d=localStorage.getItem(SK);if(d){const p=JSON.parse(d);setHoldings(p.holdings||[]);setGoals(p.goals||[]);setTxs(p.txs||[]);}}catch{}
+    try{const d=localStorage.getItem(SK);if(d){const p=JSON.parse(d);setHoldings(p.holdings||[]);setGoals(p.goals||[]);setTxs(p.txs||[]);setYields(p.yields||[]);setMyrRate(p.myrRate||DEFAULT_MYR);setLastRefresh(p.lastRefresh||null);}}catch{}
+    // Fetch live MYR rate
+    fetch("https://api.exchangerate-api.com/v4/latest/USD").then(r=>r.json()).then(d=>{if(d.rates?.MYR){setMyrRate(d.rates.MYR);setRateUpdated(new Date().toLocaleTimeString());}}).catch(()=>{});
+    // Auto-accrue yields
+    setYields(prev=>prev.map(y=>{
+      if(y.claimed) return y;
+      const elapsed=Math.min(Math.max(Math.floor((new Date()-new Date(y.startDate))/86400000),0),y.durationDays);
+      const daily=(y.principal*(y.apr/100))/365;
+      const totalAccrued=daily*elapsed;
+      const newEarnings=totalAccrued-(y.lastAccrued||0);
+      if(newEarnings>0.000001){
+        setHoldings(prev=>{
+          const idx=prev.findIndex(h=>h.name.toLowerCase()===y.rewardAsset.toLowerCase()&&h.currency===y.rewardCurrency);
+          if(idx>=0) return prev.map((h,i)=>i===idx?{...h,quantity:h.quantity+newEarnings}:h);
+          return [...prev,{name:y.rewardAsset,type:y.rewardAssetType,currency:y.rewardCurrency,purchasePrice:1,currentPrice:1,quantity:newEarnings,tag:y.tag,note:`Auto-accrued: ${y.assetName}`,ticker:""}];
+        });
+        return{...y,lastAccrued:totalAccrued,totalAccrued};
+      }
+      return{...y,totalAccrued};
+    }));
   },[]);
-  useEffect(()=>{try{localStorage.setItem(SK,JSON.stringify({holdings,goals,txs}));}catch{}},[holdings,goals,txs]);
 
-  const cvt=(a,f)=>{const u=toUSD(a,f);return dc==="USD"?u:u*MYR_RATE;};
+  useEffect(()=>{try{localStorage.setItem(SK,JSON.stringify({holdings,goals,txs,yields,myrRate,lastRefresh}));}catch{}},[holdings,goals,txs,yields,myrRate,lastRefresh]);
+
+  async function refreshPrices(){
+    setRefreshing(true);
+    const changes={};
+    const upd=[...holdings];
+    // Crypto via CoinGecko
+    const cryptoH=upd.filter(h=>h.type==="Crypto"&&h.ticker);
+    if(cryptoH.length>0){
+      const ids=cryptoH.map(h=>h.ticker.toLowerCase()).join(",");
+      try{
+        const r=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`);
+        const data=await r.json();
+        cryptoH.forEach(h=>{
+          const price=data[h.ticker.toLowerCase()]?.usd;
+          if(price){const idx=upd.findIndex(x=>x.name===h.name&&x.currency===h.currency);const old=upd[idx].currentPrice;changes[h.name]={old,new:price,diff:((price-old)/old)*100};upd[idx]={...upd[idx],currentPrice:price};}
+        });
+      }catch(e){console.error("CoinGecko",e);}
+    }
+    // Stocks/ETFs via Finnhub
+    const stockH=upd.filter(h=>(h.type==="Stocks"||h.type==="ETF/Funds")&&h.ticker);
+    for(const h of stockH){
+      try{
+        const r=await fetch(`https://finnhub.io/api/v1/quote?symbol=${h.ticker.toUpperCase()}&token=${FINNHUB_KEY}`);
+        const data=await r.json();
+        if(data.c&&data.c>0){const idx=upd.findIndex(x=>x.name===h.name&&x.currency===h.currency);const old=upd[idx].currentPrice;changes[h.name]={old,new:data.c,diff:((data.c-old)/old)*100};upd[idx]={...upd[idx],currentPrice:data.c};}
+      }catch(e){console.error("Finnhub",h.ticker,e);}
+    }
+    // Refresh MYR
+    try{const r=await fetch("https://api.exchangerate-api.com/v4/latest/USD");const data=await r.json();if(data.rates?.MYR){setMyrRate(data.rates.MYR);setRateUpdated(new Date().toLocaleTimeString());}}catch{}
+    setHoldings(upd);setPriceChanges(changes);
+    const ts=new Date().toLocaleString();setLastRefresh(ts);setRefreshing(false);
+  }
+
+  const cvt=(a,f)=>{const u=toUSD(a,f);return dc==="USD"?u:u*myrRate;};
   const tv=holdings.reduce((s,h)=>s+cvt(h.currentPrice*h.quantity,h.currency),0);
   const tc=holdings.reduce((s,h)=>s+cvt(h.purchasePrice*h.quantity,h.currency),0);
   const tgl=tv-tc,tglp=tc>0?(tgl/tc)*100:0;
-  const glc=tgl>=0?"#1D9E75":"#D85A30";
-
   const byType=ASSET_TYPES.map((t,i)=>({label:t,color:COLORS[i],value:holdings.filter(h=>h.type===t).reduce((s,h)=>s+cvt(h.currentPrice*h.quantity,h.currency),0)})).filter(d=>d.value>0);
 
-  function sortH(col){if(sCol===col)setSDir(d=>d==="asc"?"desc":"asc");else{setSCol(col);setSDir("desc");}}
-  function si(col){if(sCol!==col)return" ↕";return sDir==="asc"?" ↑":" ↓";}
-  function sortTx(col){if(txSCol===col)setTxSDir(d=>d==="asc"?"desc":"asc");else{setTxSCol(col);setTxSDir("desc");}}
-  function tsi(col){if(txSCol!==col)return" ↕";return txSDir==="asc"?" ↑":" ↓";}
+  function srtH(col){if(sCol===col)setSDir(d=>d==="asc"?"desc":"asc");else{setSCol(col);setSDir("desc");}}
+  function si(col){return sCol!==col?<span style={{color:S.textFaint}}> ↕</span>:<span style={{color:GREEN}}>{sDir==="asc"?" ↑":" ↓"}</span>;}
+  function srtTx(col){if(txSCol===col)setTxSDir(d=>d==="asc"?"desc":"asc");else{setTxSCol(col);setTxSDir("desc");}}
+  function tsi(col){return txSCol!==col?<span style={{color:S.textFaint}}> ↕</span>:<span style={{color:GREEN}}>{txSDir==="asc"?" ↑":" ↓"}</span>;}
 
   const filtered=holdings.filter(h=>(ftType==="All"||h.type===ftType)&&(ftTag==="All"||h.tag===ftTag));
   const sorted=[...filtered].sort((a,b)=>{
-    if(!sCol)return 0;
-    let av,bv;
-    if(sCol==="name"){av=a.name.toLowerCase();bv=b.name.toLowerCase();}
-    else if(sCol==="type"){av=a.type;bv=b.type;}
-    else if(sCol==="tag"){av=a.tag;bv=b.tag;}
-    else if(sCol==="qty"){av=a.quantity;bv=b.quantity;}
-    else if(sCol==="value"){av=cvt(a.currentPrice*a.quantity,a.currency);bv=cvt(b.currentPrice*b.quantity,b.currency);}
-    else if(sCol==="share"){av=tv>0?cvt(a.currentPrice*a.quantity,a.currency)/tv*100:0;bv=tv>0?cvt(b.currentPrice*b.quantity,b.currency)/tv*100:0;}
-    else if(sCol==="gl"){av=cvt(a.currentPrice*a.quantity,a.currency)-cvt(a.purchasePrice*a.quantity,a.currency);bv=cvt(b.currentPrice*b.quantity,b.currency)-cvt(b.purchasePrice*b.quantity,b.currency);}
-    else if(sCol==="glp"){const ac=cvt(a.purchasePrice*a.quantity,a.currency),bc=cvt(b.purchasePrice*b.quantity,b.currency);av=ac>0?(cvt(a.currentPrice*a.quantity,a.currency)-ac)/ac*100:0;bv=bc>0?(cvt(b.currentPrice*b.quantity,b.currency)-bc)/bc*100:0;}
-    if(av<bv)return sDir==="asc"?-1:1;if(av>bv)return sDir==="asc"?1:-1;return 0;
+    if(!sCol) return 0;
+    const gv=x=>{
+      if(sCol==="name") return x.name.toLowerCase();
+      if(sCol==="type") return x.type;
+      if(sCol==="tag") return x.tag;
+      if(sCol==="qty") return x.quantity;
+      if(sCol==="value") return cvt(x.currentPrice*x.quantity,x.currency);
+      if(sCol==="share") return tv>0?cvt(x.currentPrice*x.quantity,x.currency)/tv*100:0;
+      if(sCol==="gl") return cvt(x.currentPrice*x.quantity,x.currency)-cvt(x.purchasePrice*x.quantity,x.currency);
+      if(sCol==="glp"){const c2=cvt(x.purchasePrice*x.quantity,x.currency);return c2>0?(cvt(x.currentPrice*x.quantity,x.currency)-c2)/c2*100:0;}
+      return 0;
+    };
+    const av=gv(a),bv=gv(b);
+    if(av<bv) return sDir==="asc"?-1:1;if(av>bv) return sDir==="asc"?1:-1;return 0;
   });
 
   const filteredTx=txs.filter(t=>txFt==="All"||t.assetType===txFt);
   const sortedTx=[...filteredTx].sort((a,b)=>{
     let av,bv;
     if(txSCol==="timestamp"){av=a.timestamp;bv=b.timestamp;}
-    else if(txSCol==="assetName"){av=a.assetName.toLowerCase();bv=b.assetName.toLowerCase();}
+    else if(txSCol==="assetName"){av=a.assetName?.toLowerCase();bv=b.assetName?.toLowerCase();}
     else if(txSCol==="type"){av=a.type;bv=b.type;}
     else if(txSCol==="assetType"){av=a.assetType;bv=b.assetType;}
     else if(txSCol==="quantity"){av=a.quantity;bv=b.quantity;}
     else if(txSCol==="price"){av=a.price;bv=b.price;}
     else if(txSCol==="total"){av=a.price*a.quantity;bv=b.price*b.quantity;}
-    if(av<bv)return txSDir==="asc"?-1:1;if(av>bv)return txSDir==="asc"?1:-1;return 0;
+    if(av<bv) return txSDir==="asc"?-1:1;if(av>bv) return txSDir==="asc"?1:-1;return 0;
   });
 
   function saveH(){
     const h={...hForm,purchasePrice:parseFloat(hForm.purchasePrice)||0,currentPrice:parseFloat(hForm.currentPrice)||0,quantity:parseFloat(hForm.quantity)||0};
-    if(!h.name)return;
+    if(!h.name) return;
     if(editIdx!==null){setHoldings(p=>p.map((x,i)=>i===editIdx?h:x));setEditIdx(null);}
     else setHoldings(p=>[...p,h]);
     setHForm(EMPTY_H);setShowH(false);
   }
-  function startEdit(i){const h=holdings[i];setHForm({...h,purchasePrice:String(h.purchasePrice),currentPrice:String(h.currentPrice),quantity:String(h.quantity)});setEditIdx(i);setShowH(true);}
-  function saveG(){if(!gForm.name||!gForm.target)return;setGoals(p=>[...p,{...gForm,target:parseFloat(gForm.target)}]);setGForm({name:"",target:"",currency:"USD"});setShowG(false);}
+  function startEditH(i){const h=holdings[i];setHForm({...h,purchasePrice:String(h.purchasePrice),currentPrice:String(h.currentPrice),quantity:String(h.quantity)});setEditIdx(i);setShowH(true);}
+  function saveG(){if(!gForm.name||!gForm.target) return;setGoals(p=>[...p,{...gForm,target:parseFloat(gForm.target)}]);setGForm({name:"",target:"",currency:"USD"});setShowG(false);}
 
   function commitTx(){
     const price=parseFloat(txForm.price)||0,qty=parseFloat(txForm.quantity)||0;
-    if(!txForm.assetName||!price||!qty)return;
-    const tx={...txForm,price,quantity:qty,timestamp:new Date().toISOString(),id:Date.now()};
-    setTxs(p=>[tx,...p]);
-    setHoldings(prev=>{
-      const idx=prev.findIndex(h=>h.name.toLowerCase()===txForm.assetName.toLowerCase()&&h.currency===txForm.currency);
-      if(txForm.type==="BUY"){
-        if(idx>=0){const h=prev[idx],tq=h.quantity+qty,ap=(h.purchasePrice*h.quantity+price*qty)/tq;return prev.map((x,i)=>i===idx?{...x,quantity:tq,purchasePrice:ap,currentPrice:price}:x);}
-        return [...prev,{name:txForm.assetName,type:txForm.assetType,currency:txForm.currency,purchasePrice:price,currentPrice:price,quantity:qty,tag:txForm.tag,note:txForm.note}];
-      }else{
-        if(idx>=0){const nq=prev[idx].quantity-qty;if(nq<=0)return prev.filter((_,i)=>i!==idx);return prev.map((x,i)=>i===idx?{...x,quantity:nq,currentPrice:price}:x);}
-        return prev;
-      }
-    });
-    setTxForm({type:"BUY",assetName:"",assetType:"Stocks",currency:"USD",price:"",quantity:"",tag:"Growth",note:""});
-    setShowTx(false);
+    if(!txForm.assetName||!price||!qty) return;
+    if(editTxIdx!==null){setTxs(p=>p.map((x,i)=>i===editTxIdx?{...txForm,price,quantity:qty,timestamp:x.timestamp,id:x.id}:x));setEditTxIdx(null);}
+    else{
+      setTxs(p=>[{...txForm,price,quantity:qty,timestamp:new Date().toISOString(),id:Date.now()},...p]);
+      setHoldings(prev=>{
+        const idx=prev.findIndex(h=>h.name.toLowerCase()===txForm.assetName.toLowerCase()&&h.currency===txForm.currency);
+        if(txForm.type==="BUY"){
+          if(idx>=0){const h=prev[idx],tq=h.quantity+qty,ap=(h.purchasePrice*h.quantity+price*qty)/tq;return prev.map((x,i)=>i===idx?{...x,quantity:tq,purchasePrice:ap,currentPrice:price}:x);}
+          return[...prev,{name:txForm.assetName,type:txForm.assetType,currency:txForm.currency,purchasePrice:price,currentPrice:price,quantity:qty,tag:txForm.tag,note:txForm.note,ticker:""}];
+        }else{
+          if(idx>=0){const nq=prev[idx].quantity-qty;if(nq<=0) return prev.filter((_,i)=>i!==idx);return prev.map((x,i)=>i===idx?{...x,quantity:nq,currentPrice:price}:x);}
+          return prev;
+        }
+      });
+    }
+    setTxForm({type:"BUY",assetName:"",assetType:"Stocks",currency:"USD",price:"",quantity:"",tag:"Growth",note:""});setShowTx(false);
+  }
+  function startEditTx(i){const t=sortedTx[i];const oi=txs.findIndex(x=>x.id===t.id);setTxForm({...t,price:String(t.price),quantity:String(t.quantity)});setEditTxIdx(oi);setShowTx(true);}
+  function deleteTx(i){const t=sortedTx[i];setTxs(p=>p.filter(x=>x.id!==t.id));}
+
+  function addYield(){
+    const y={...yForm,principal:parseFloat(yForm.principal)||0,apr:parseFloat(yForm.apr)||0,durationDays:parseInt(yForm.durationDays)||0,id:Date.now(),lastAccrued:0,totalAccrued:0,claimed:false};
+    if(!y.assetName||!y.principal||!y.apr||!y.durationDays||!y.rewardAsset) return;
+    setYields(p=>[y,...p]);setYForm(EMPTY_Y);setShowY(false);
+  }
+  function claimYield(i){
+    const y=yields[i];
+    const daily=(y.principal*(y.apr/100))/365;
+    const elapsed=Math.min(Math.max(Math.floor((new Date()-new Date(y.startDate))/86400000),0),y.durationDays);
+    setTxs(p=>[{type:"YIELD",assetName:y.rewardAsset,assetType:y.rewardAssetType,currency:y.rewardCurrency,price:1,quantity:daily*elapsed,tag:y.tag,note:`Claimed: ${y.assetName} @ ${y.apr}% APR`,timestamp:new Date().toISOString(),id:Date.now()},...p]);
+    setYields(p=>p.map((x,j)=>j===i?{...x,claimed:true,claimedAt:new Date().toISOString()}:x));
+  }
+  function yStats(y){
+    const elapsed=Math.min(Math.max(Math.floor((new Date()-new Date(y.startDate))/86400000),0),y.durationDays);
+    const daily=(y.principal*(y.apr/100))/365;
+    return{elapsed,remaining:y.durationDays-elapsed,daily,totalProjected:daily*y.durationDays,accrued:daily*elapsed,progress:(elapsed/y.durationDays)*100};
   }
 
-  function exportCSV(){
-    const rows=[["Name","Type","Tag","Currency","Purchase Price","Current Price","Quantity","Current Value","Gain/Loss","Gain/Loss %","Portfolio Share"]];
-    holdings.forEach(h=>{const v=cvt(h.currentPrice*h.quantity,h.currency),c=cvt(h.purchasePrice*h.quantity,h.currency),gl=v-c,sh=tv>0?(v/tv*100).toFixed(2):0;rows.push([h.name,h.type,h.tag,h.currency,h.purchasePrice,h.currentPrice,h.quantity,v.toFixed(2),gl.toFixed(2),(c>0?(gl/c*100).toFixed(2):0)+"%",sh+"%"]);});
-    dl(rows,"portfolio.csv");
-  }
-  function exportTxCSV(){
-    const rows=[["Timestamp","Type","Asset","Asset Type","Tag","Currency","Price","Quantity","Total","Note"]];
-    txs.forEach(t=>rows.push([new Date(t.timestamp).toLocaleString(),t.type,t.assetName,t.assetType,t.tag,t.currency,t.price,t.quantity,(t.price*t.quantity).toFixed(2),t.note]));
-    dl(rows,"transactions.csv");
-  }
   function dl(rows,name){const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(rows.map(r=>r.join(",")).join("\n"));a.download=name;a.click();}
+  function exportCSV(){dl([["Name","Type","Tag","Currency","Ticker","Purchase Price","Current Price","Quantity","Current Value","Gain/Loss","G/L %","Portfolio Share"],...holdings.map(h=>{const v=cvt(h.currentPrice*h.quantity,h.currency),c2=cvt(h.purchasePrice*h.quantity,h.currency),gl=v-c2,sh=tv>0?(v/tv*100).toFixed(2):0;return[h.name,h.type,h.tag,h.currency,h.ticker||"",h.purchasePrice,h.currentPrice,h.quantity,v.toFixed(2),gl.toFixed(2),(c2>0?(gl/c2*100).toFixed(2):0)+"%",sh+"%"];})],"portfolio.csv");}
+  function importCSV(e){const file=e.target.files[0];if(!file) return;const r=new FileReader();r.onload=ev=>{const rows=ev.target.result.split("\n").filter(l=>l.trim()).slice(1).map(l=>l.split(","));const imp=rows.map(r=>({name:r[0]?.trim(),type:r[1]?.trim(),tag:r[2]?.trim(),currency:r[3]?.trim(),ticker:r[4]?.trim()||"",purchasePrice:parseFloat(r[5])||0,currentPrice:parseFloat(r[6])||0,quantity:parseFloat(r[7])||0,note:""})).filter(h=>h.name);if(imp.length>0){setHoldings(imp);alert(`✅ ${imp.length} holdings imported`);}else alert("No valid holdings found.");};r.readAsText(file);e.target.value="";}
+  function exportTxCSV(){dl([["Timestamp","Type","Asset","Asset Type","Tag","Currency","Price","Quantity","Total","Note"],...txs.map(t=>[new Date(t.timestamp).toLocaleString(),t.type,t.assetName,t.assetType,t.tag,t.currency,t.price,t.quantity,(t.price*t.quantity).toFixed(2),t.note])],"transactions.csv");}
+  function importTxCSV(e){const file=e.target.files[0];if(!file) return;const r=new FileReader();r.onload=ev=>{const rows=ev.target.result.split("\n").filter(l=>l.trim()).slice(1).map(l=>l.split(","));const imp=rows.map(r=>({timestamp:r[0]?.trim(),type:r[1]?.trim(),assetName:r[2]?.trim(),assetType:r[3]?.trim(),tag:r[4]?.trim(),currency:r[5]?.trim(),price:parseFloat(r[6])||0,quantity:parseFloat(r[7])||0,note:r[9]?.trim()||"",id:Date.now()+Math.random()})).filter(t=>t.assetName);if(imp.length>0){setTxs(p=>[...imp,...p]);alert(`✅ ${imp.length} transactions imported`);}else alert("No valid transactions found.");};r.readAsText(file);e.target.value="";}
 
-  const card={background:"var(--bg1)",border:"0.5px solid var(--b1)",borderRadius:"var(--r2)",padding:"1rem 1.25rem"};
-  const tabs=["overview","holdings","transactions","goals"];
-  const tLabel={overview:"Overview",holdings:"Holdings",transactions:"Transactions",goals:"Goals"};
-  const thS=(col,left)=>({padding:"8px 6px",textAlign:left?"left":"right",cursor:"pointer",userSelect:"none",whiteSpace:"nowrap",color:sCol===col?"var(--t1)":"var(--t2)"});
-  const txThS=(col,left)=>({padding:"8px 6px",textAlign:left?"left":"right",cursor:"pointer",userSelect:"none",whiteSpace:"nowrap",color:txSCol===col?"var(--t1)":"var(--t2)"});
+  const liveCount=holdings.filter(h=>h.ticker&&(h.type==="Stocks"||h.type==="ETF/Funds"||h.type==="Crypto")).length;
+  const TABS=["overview","holdings","transactions","goals"];
+  const TL={overview:"Overview",holdings:"Holdings",transactions:"Transactions",goals:"Goals"};
+
+  const thStyle=(col,left)=>({padding:"10px 8px",textAlign:left?"left":"right",cursor:"pointer",userSelect:"none",color:S.textDim,fontWeight:500,fontSize:11,textTransform:"uppercase",letterSpacing:"0.05em"});
 
   return(
-    <div style={{fontFamily:"var(--font)",color:"var(--t1)"}}>
+    <div style={{fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",color:S.text,background:S.bg,minHeight:"100vh",padding:"1.5rem 1rem"}}>
+
       {/* Header */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.25rem"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1.75rem",flexWrap:"wrap",gap:12}}>
         <div>
-          <p style={{fontSize:13,color:"var(--t2)"}}>Portfolio Dashboard</p>
-          <p style={{fontSize:22,fontWeight:500}}>My Investments</p>
+          <p style={{margin:0,fontSize:11,color:S.textDim,textTransform:"uppercase",letterSpacing:"0.1em",fontWeight:500}}>Portfolio Dashboard</p>
+          <p style={{margin:"4px 0 0",fontSize:26,fontWeight:700,letterSpacing:"-0.5px"}}>My Investments</p>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span style={{fontSize:12,color:"var(--t2)"}}>Display in</span>
-          {CURRENCIES.map(c=>(
-            <button key={c} onClick={()=>setDc(c)} style={{padding:"4px 12px",fontSize:12,fontWeight:dc===c?500:400,
-              background:dc===c?"var(--bgi)":"transparent",color:dc===c?"var(--ti)":"var(--t2)",
-              border:"0.5px solid var(--b1)",borderRadius:"var(--r1)"}}>
-              {c}
-            </button>
-          ))}
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <div style={{padding:"5px 12px",background:S.card,border:`1px solid ${S.cardBorder}`,borderRadius:8,fontSize:12,color:S.textDim}}>
+            <span style={{color:GREEN}}>●</span> 1 USD = <strong style={{color:S.text}}>{myrRate.toFixed(4)}</strong> MYR
+            {rateUpdated&&<span style={{marginLeft:6,fontSize:10,color:S.textFaint}}>@ {rateUpdated}</span>}
+          </div>
+          <button onClick={refreshPrices} disabled={refreshing} style={{...bP,display:"flex",alignItems:"center",gap:6,opacity:refreshing?0.6:1}}>
+            <span style={{display:"inline-block",animation:refreshing?"spin 1s linear infinite":"none",fontSize:14}}>⟳</span>
+            {refreshing?"Refreshing…":`Refresh Prices${liveCount>0?` (${liveCount})`:""}`}
+          </button>
+          <div style={{display:"flex",gap:4}}>
+            {CURRENCIES.map(c=><button key={c} onClick={()=>setDc(c)} style={{...bG,background:dc===c?GREEN_DIM:"transparent",color:dc===c?GREEN:S.textDim,border:`1px solid ${dc===c?GREEN_BORDER:S.inputBorder}`,fontWeight:dc===c?600:400}}>{c}</button>)}
+          </div>
         </div>
       </div>
 
+      {lastRefresh&&<div style={{marginBottom:12,fontSize:11,color:S.textFaint}}>Last refresh: {lastRefresh}</div>}
+
       {/* Tabs */}
-      <div style={{display:"flex",borderBottom:"0.5px solid var(--b1)",marginBottom:"1.25rem"}}>
-        {tabs.map(t=>(
-          <button key={t} onClick={()=>setTab(t)} style={{padding:"8px 20px",fontSize:14,background:"transparent",border:"none",
-            borderBottom:tab===t?"2px solid var(--t1)":"2px solid transparent",
-            color:tab===t?"var(--t1)":"var(--t2)",fontWeight:tab===t?500:400}}>
-            {tLabel[t]}
-          </button>
-        ))}
+      <div style={{display:"flex",gap:2,marginBottom:"1.5rem",background:S.card,borderRadius:10,padding:4,border:`1px solid ${S.cardBorder}`,width:"fit-content"}}>
+        {TABS.map(t=><button key={t} onClick={()=>setTab(t)} style={{padding:"7px 18px",fontSize:13,background:tab===t?GREEN_DIM:"transparent",color:tab===t?GREEN:S.textDim,border:`1px solid ${tab===t?GREEN_BORDER:"transparent"}`,borderRadius:8,cursor:"pointer",fontWeight:tab===t?600:400,fontFamily:"inherit"}}>{TL[t]}</button>)}
       </div>
 
       {/* OVERVIEW */}
       {tab==="overview"&&(
         <div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:12,marginBottom:"1.25rem"}}>
-            {[{l:"Total Value",v:fmt(tv,dc),c:"var(--t1)"},{l:"Total Cost",v:fmt(tc,dc),c:"var(--t2)"},
-              {l:"Gain / Loss",v:fmt(Math.abs(tgl),dc),c:glc,pre:tgl>=0?"▲ ":"▼ "},{l:"Return",v:pct(tglp),c:glc}
-            ].map(x=>(
-              <div key={x.l} style={{background:"var(--bg2)",borderRadius:"var(--r1)",padding:"1rem"}}>
-                <p style={{fontSize:13,color:"var(--t2)",marginBottom:4}}>{x.l}</p>
-                <p style={{fontSize:20,fontWeight:500,color:x.c}}>{x.pre||""}{x.v}</p>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
+            {[{l:"Total Value",v:fmt(tv,dc),c:S.text},{l:"Total Cost",v:fmt(tc,dc),c:S.textDim},{l:"Gain / Loss",v:fmt(Math.abs(tgl),dc),c:tgl>=0?GREEN:RED,pre:tgl>=0?"▲ ":"▼ "},{l:"Return",v:pct(tglp),c:tglp>=0?GREEN:RED}].map(x=>(
+              <div key={x.l} style={{...card,borderLeft:`3px solid ${x.c===S.text||x.c===S.textDim?S.cardBorder:x.c}`}}>
+                <p style={{margin:"0 0 6px",fontSize:11,color:S.textDim,textTransform:"uppercase",letterSpacing:"0.06em"}}>{x.l}</p>
+                <p style={{margin:0,fontSize:20,fontWeight:700,color:x.c}}>{x.pre||""}{x.v}</p>
               </div>
             ))}
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
             <div style={card}>
-              <p style={{fontWeight:500,fontSize:14,marginBottom:12}}>Asset allocation</p>
-              <div style={{display:"flex",alignItems:"center",gap:12}}>
-                <PieChart data={byType}/>
+              <p style={{margin:"0 0 14px",fontWeight:600,fontSize:14}}>Asset Allocation</p>
+              <div style={{display:"flex",alignItems:"center",gap:16}}>
+                <Pie data={byType}/>
                 <div style={{flex:1}}>
-                  {byType.map((d)=>(
-                    <div key={d.label} style={{display:"flex",alignItems:"flex-start",gap:6,marginBottom:7}}>
-                      <span style={{width:10,height:10,borderRadius:2,background:d.color,flexShrink:0,marginTop:2}}/>
+                  {byType.length===0?<p style={{color:S.textDim,fontSize:13}}>No holdings yet.</p>:byType.map((d)=>(
+                    <div key={d.label} style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:8}}>
+                      <span style={{width:8,height:8,borderRadius:2,background:d.color,flexShrink:0,marginTop:3}}/>
                       <div style={{flex:1}}>
                         <div style={{display:"flex",justifyContent:"space-between"}}>
-                          <span style={{fontSize:12,color:"var(--t2)"}}>{d.label}</span>
-                          <span style={{fontSize:12,fontWeight:500}}>{((d.value/tv)*100).toFixed(1)}%</span>
+                          <span style={{fontSize:12,color:S.textDim}}>{d.label}</span>
+                          <span style={{fontSize:12,fontWeight:600}}>{((d.value/tv)*100).toFixed(1)}%</span>
                         </div>
-                        <div style={{fontSize:11,color:"var(--t2)"}}>{fmt(d.value,dc)}</div>
+                        <div style={{fontSize:11,color:S.textFaint,marginTop:1}}>{fmt(d.value,dc)}</div>
                       </div>
                     </div>
                   ))}
@@ -267,19 +407,25 @@ function App(){
               </div>
             </div>
             <div style={card}>
-              <p style={{fontWeight:500,fontSize:14,marginBottom:12}}>Top holdings</p>
-              {holdings.length===0?<p style={{color:"var(--t2)",fontSize:13}}>No holdings yet.</p>
+              <p style={{margin:"0 0 14px",fontWeight:600,fontSize:14}}>Top Holdings</p>
+              {holdings.length===0?<p style={{color:S.textDim,fontSize:13}}>No holdings yet.</p>
                 :[...holdings].sort((a,b)=>cvt(b.currentPrice*b.quantity,b.currency)-cvt(a.currentPrice*a.quantity,a.currency)).slice(0,10).map((h,i)=>{
-                  const v=cvt(h.currentPrice*h.quantity,h.currency),c2=cvt(h.purchasePrice*h.quantity,h.currency),gl=v-c2;
+                  const v=cvt(h.currentPrice*h.quantity,h.currency),c2=cvt(h.purchasePrice*h.quantity,h.currency),gl=v-c2,chg=priceChanges[h.name];
                   return(
-                    <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,paddingBottom:8,borderBottom:"0.5px solid var(--b1)"}}>
-                      <div>
-                        <p style={{fontWeight:500,fontSize:13}}>{h.name}</p>
-                        <p style={{fontSize:11,color:"var(--t2)"}}>{h.type} · {h.tag}</p>
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,paddingBottom:10,borderBottom:`1px solid ${S.cardBorder}`}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <div style={{width:32,height:32,borderRadius:8,background:`${COLORS[i%COLORS.length]}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:COLORS[i%COLORS.length],flexShrink:0}}>{h.name.slice(0,2).toUpperCase()}</div>
+                        <div>
+                          <p style={{margin:0,fontWeight:600,fontSize:13}}>{h.name}</p>
+                          <p style={{margin:0,fontSize:11,color:S.textDim}}>{h.ticker?<span style={{color:GREEN,marginRight:4}}>{h.ticker}</span>:null}{h.type}</p>
+                        </div>
                       </div>
                       <div style={{textAlign:"right"}}>
-                        <p style={{fontWeight:500,fontSize:13}}>{fmt(v,dc)}</p>
-                        <p style={{fontSize:11,color:gl>=0?"#1D9E75":"#D85A30"}}>{gl>=0?"▲":"▼"} {fmt(Math.abs(gl),dc)}</p>
+                        <p style={{margin:0,fontWeight:600,fontSize:13}}>{fmt(v,dc)}</p>
+                        <div style={{display:"flex",alignItems:"center",gap:6,justifyContent:"flex-end"}}>
+                          <p style={{margin:0,fontSize:11,color:gl>=0?GREEN:RED}}>{gl>=0?"▲":"▼"} {fmt(Math.abs(gl),dc)}</p>
+                          {chg&&<span style={{fontSize:10,padding:"1px 6px",borderRadius:99,background:chg.diff>=0?GREEN_DIM:"rgba(255,69,58,0.12)",color:chg.diff>=0?GREEN:RED,fontWeight:600}}>{chg.diff>=0?"+":""}{chg.diff.toFixed(2)}%</span>}
+                        </div>
                       </div>
                     </div>
                   );
@@ -292,87 +438,74 @@ function App(){
       {/* HOLDINGS */}
       {tab==="holdings"&&(
         <div>
-          <div style={{display:"flex",gap:8,marginBottom:"1rem",flexWrap:"wrap",alignItems:"center"}}>
-            <select value={ftType} onChange={e=>setFtType(e.target.value)}>
-              <option value="All">All types</option>{ASSET_TYPES.map(t=><option key={t}>{t}</option>)}
-            </select>
-            <select value={ftTag} onChange={e=>setFtTag(e.target.value)}>
-              <option value="All">All tags</option>{TAGS.map(t=><option key={t}>{t}</option>)}
-            </select>
+          <LineGraph holdings={holdings} transactions={txs}/>
+          {holdings.some(h=>!h.ticker&&(h.type==="Stocks"||h.type==="ETF/Funds"||h.type==="Crypto"))&&(
+            <div style={{marginBottom:14,padding:"10px 14px",background:"rgba(10,132,255,0.08)",border:"1px solid rgba(10,132,255,0.25)",borderRadius:8,fontSize:12,color:"#64ACFF"}}>
+              💡 Add a ticker symbol to Stocks/ETFs (e.g. <strong>AAPL</strong>) and Crypto (e.g. <strong>bitcoin</strong>) to enable live price refresh.
+            </div>
+          )}
+          <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+            <select value={ftType} onChange={e=>setFtType(e.target.value)} style={{...iS,width:"auto"}}><option value="All">All types</option>{ASSET_TYPES.map(t=><option key={t}>{t}</option>)}</select>
+            <select value={ftTag} onChange={e=>setFtTag(e.target.value)} style={{...iS,width:"auto"}}><option value="All">All tags</option>{TAGS.map(t=><option key={t}>{t}</option>)}</select>
             <div style={{flex:1}}/>
-            <button onClick={exportCSV} style={{fontSize:13,padding:"6px 14px"}}>⬇ Export CSV</button>
-            <button onClick={()=>{setHForm(EMPTY_H);setEditIdx(null);setShowH(true);}}
-              style={{fontSize:13,padding:"6px 14px",background:"var(--bgi)",color:"var(--ti)",border:"0.5px solid var(--bi)"}}>
-              + Add holding
-            </button>
+            <button onClick={exportCSV} style={bG}>⬇ Export</button>
+            <label style={{...bG,display:"inline-block",cursor:"pointer"}}>⬆ Import<input type="file" accept=".csv" style={{display:"none"}} onChange={importCSV}/></label>
+            <button onClick={()=>{setHForm(EMPTY_H);setEditIdx(null);setShowH(true);}} style={bP}>+ Add holding</button>
           </div>
           {showH&&(
-            <div style={{...card,border:"0.5px solid var(--b2)",marginBottom:"1rem"}}>
-              <p style={{fontWeight:500,fontSize:14,marginBottom:12}}>{editIdx!==null?"Edit holding":"New holding"}</p>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                {[["Name","name","text"],["Quantity","quantity","number"]].map(([l,k,t])=>(
-                  <div key={k}><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>{l}</p>
-                  <input type={t} value={hForm[k]} onChange={e=>setHForm(f=>({...f,[k]:e.target.value}))} style={{width:"100%"}}/></div>
-                ))}
-                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Currency</p>
-                  <select value={hForm.currency} onChange={e=>setHForm(f=>({...f,currency:e.target.value}))} style={{width:"100%"}}>
-                    {CURRENCIES.map(c=><option key={c}>{c}</option>)}</select></div>
-                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Asset type</p>
-                  <select value={hForm.type} onChange={e=>setHForm(f=>({...f,type:e.target.value}))} style={{width:"100%"}}>
-                    {ASSET_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
-                {[["Purchase price","purchasePrice"],["Current price","currentPrice"]].map(([l,k])=>(
-                  <div key={k}><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>{l} ({hForm.currency})</p>
-                  <input type="number" value={hForm[k]} onChange={e=>setHForm(f=>({...f,[k]:e.target.value}))} style={{width:"100%"}}/></div>
-                ))}
-                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Tag</p>
-                  <select value={hForm.tag} onChange={e=>setHForm(f=>({...f,tag:e.target.value}))} style={{width:"100%"}}>
-                    {TAGS.map(t=><option key={t}>{t}</option>)}</select></div>
-                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Note (optional)</p>
-                  <input value={hForm.note} onChange={e=>setHForm(f=>({...f,note:e.target.value}))} style={{width:"100%"}}/></div>
+            <div style={{...card,marginBottom:16}}>
+              <p style={{margin:"0 0 14px",fontWeight:600,fontSize:14}}>{editIdx!==null?"Edit Holding":"New Holding"}</p>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                {[["Name","name","text"],["Quantity","quantity","number"]].map(([l,k,t])=>(<div key={k}><Lbl>{l}</Lbl><input type={t} value={hForm[k]} onChange={e=>setHForm(f=>({...f,[k]:e.target.value}))} style={iS}/></div>))}
+                <div><Lbl>Currency</Lbl><select value={hForm.currency} onChange={e=>setHForm(f=>({...f,currency:e.target.value}))} style={iS}>{CURRENCIES.map(c=><option key={c}>{c}</option>)}</select></div>
+                <div><Lbl>Asset type</Lbl><select value={hForm.type} onChange={e=>setHForm(f=>({...f,type:e.target.value}))} style={iS}>{ASSET_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
+                {[["Purchase price","purchasePrice"],["Current price","currentPrice"]].map(([l,k])=>(<div key={k}><Lbl>{l} ({hForm.currency})</Lbl><input type="number" value={hForm[k]} onChange={e=>setHForm(f=>({...f,[k]:e.target.value}))} style={iS}/></div>))}
+                <div><Lbl>Ticker {(hForm.type==="Stocks"||hForm.type==="ETF/Funds")?"(e.g. AAPL)":hForm.type==="Crypto"?"(e.g. bitcoin)":"(optional)"}</Lbl><input value={hForm.ticker||""} onChange={e=>setHForm(f=>({...f,ticker:e.target.value}))} placeholder={hForm.type==="Crypto"?"bitcoin, ethereum…":"AAPL, MSFT…"} style={iS}/></div>
+                <div><Lbl>Tag</Lbl><select value={hForm.tag} onChange={e=>setHForm(f=>({...f,tag:e.target.value}))} style={iS}>{TAGS.map(t=><option key={t}>{t}</option>)}</select></div>
+                <div style={{gridColumn:"1/-1"}}><Lbl>Note (optional)</Lbl><input value={hForm.note} onChange={e=>setHForm(f=>({...f,note:e.target.value}))} style={iS}/></div>
               </div>
-              <div style={{display:"flex",gap:8,marginTop:12}}>
-                <button onClick={saveH} style={{fontSize:13,padding:"6px 16px",background:"var(--bgi)",color:"var(--ti)",border:"0.5px solid var(--bi)"}}>Save</button>
-                <button onClick={()=>{setShowH(false);setEditIdx(null);}} style={{fontSize:13,padding:"6px 16px"}}>Cancel</button>
+              <div style={{display:"flex",gap:8,marginTop:14}}>
+                <button onClick={saveH} style={bP}>Save</button>
+                <button onClick={()=>{setShowH(false);setEditIdx(null);}} style={bG}>Cancel</button>
               </div>
             </div>
           )}
-          {sorted.length===0?<p style={{color:"var(--t2)",fontSize:13}}>No holdings match the filter.</p>:(
+          {sorted.length===0?<p style={{color:S.textDim,fontSize:13}}>No holdings match the filter.</p>:(
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
                 <thead>
-                  <tr style={{borderBottom:"0.5px solid var(--b1)"}}>
-                    <th style={thS("name",true)} onClick={()=>sortH("name")}>Name{si("name")}</th>
-                    <th style={thS("type")} onClick={()=>sortH("type")}>Type{si("type")}</th>
-                    <th style={thS("tag")} onClick={()=>sortH("tag")}>Tag{si("tag")}</th>
-                    <th style={thS("qty")} onClick={()=>sortH("qty")}>Qty{si("qty")}</th>
-                    <th style={thS("value")} onClick={()=>sortH("value")}>Value{si("value")}</th>
-                    <th style={thS("share")} onClick={()=>sortH("share")}>Share%{si("share")}</th>
-                    <th style={thS("gl")} onClick={()=>sortH("gl")}>G/L{si("gl")}</th>
-                    <th style={thS("glp")} onClick={()=>sortH("glp")}>G/L%{si("glp")}</th>
-                    <th style={{padding:"8px 6px"}}></th>
+                  <tr style={{borderBottom:`1px solid ${S.cardBorder}`}}>
+                    {[["name","Name",true],["type","Type"],["tag","Tag"],["qty","Qty"],["value","Value"],["share","Share%"],["gl","G/L"],["glp","G/L%"]].map(([col,label,left])=>(
+                      <th key={col} onClick={()=>srtH(col)} style={thStyle(col,left)}>{label}{si(col)}</th>
+                    ))}
+                    <th style={{...thStyle("live"),textAlign:"right"}}>Live</th>
+                    <th style={{padding:"10px 8px"}}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {sorted.map((h,i)=>{
                     const oi=holdings.indexOf(h),v=cvt(h.currentPrice*h.quantity,h.currency),c2=cvt(h.purchasePrice*h.quantity,h.currency),gl=v-c2,glp=c2>0?(gl/c2*100):0,sh=tv>0?(v/tv*100):0;
+                    const chg=priceChanges[h.name];
+                    const hasLive=h.ticker&&(h.type==="Stocks"||h.type==="ETF/Funds"||h.type==="Crypto");
                     return(
-                      <tr key={i} style={{borderBottom:"0.5px solid var(--b1)"}}>
-                        <td style={{padding:"8px 6px"}}>
-                          <p style={{fontWeight:500}}>{h.name}</p>
-                          {h.note&&<p style={{fontSize:11,color:"var(--t2)"}}>{h.note}</p>}
+                      <tr key={i} style={{borderBottom:`1px solid ${S.cardBorder}`}}>
+                        <td style={{padding:"10px 8px"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10}}>
+                            <div style={{width:28,height:28,borderRadius:6,background:`${COLORS[oi%COLORS.length]}18`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:COLORS[oi%COLORS.length],flexShrink:0}}>{h.name.slice(0,2).toUpperCase()}</div>
+                            <div><p style={{margin:0,fontWeight:600}}>{h.name}</p>{h.ticker&&<p style={{margin:0,fontSize:10,color:GREEN,fontFamily:"monospace"}}>{h.ticker}</p>}</div>
+                          </div>
                         </td>
-                        <td style={{padding:"8px 6px",textAlign:"right",color:"var(--t2)"}}>{h.type}</td>
-                        <td style={{padding:"8px 6px",textAlign:"right"}}>
-                          <span style={{fontSize:11,padding:"2px 7px",borderRadius:"var(--r1)",background:"var(--bg2)",color:"var(--t2)"}}>{h.tag}</span>
-                        </td>
-                        <td style={{padding:"8px 6px",textAlign:"right"}}>{h.quantity}</td>
-                        <td style={{padding:"8px 6px",textAlign:"right",fontWeight:500}}>{fmt(v,dc)}</td>
-                        <td style={{padding:"8px 6px",textAlign:"right"}}>{sh.toFixed(2)}%</td>
-                        <td style={{padding:"8px 6px",textAlign:"right",color:gl>=0?"#1D9E75":"#D85A30"}}>{gl>=0?"+":""}{fmt(gl,dc)}</td>
-                        <td style={{padding:"8px 6px",textAlign:"right",color:glp>=0?"#1D9E75":"#D85A30"}}>{pct(glp)}</td>
-                        <td style={{padding:"8px 6px",textAlign:"right",whiteSpace:"nowrap"}}>
-                          <button onClick={()=>startEdit(oi)} style={{background:"none",border:"none",padding:"2px 4px",color:"var(--t2)",fontSize:15}}>✎</button>
-                          <button onClick={()=>setHoldings(p=>p.filter((_,j)=>j!==oi))} style={{background:"none",border:"none",padding:"2px 4px",color:"var(--t2)",fontSize:15}}>🗑</button>
+                        <td style={{padding:"10px 8px",textAlign:"right",color:S.textDim,fontSize:12}}>{h.type}</td>
+                        <td style={{padding:"10px 8px",textAlign:"right"}}><span style={{fontSize:11,padding:"2px 8px",borderRadius:99,background:"rgba(255,255,255,0.05)",color:S.textDim}}>{h.tag}</span></td>
+                        <td style={{padding:"10px 8px",textAlign:"right",fontFamily:"monospace"}}>{h.quantity.toFixed(6).replace(/\.?0+$/,"")}</td>
+                        <td style={{padding:"10px 8px",textAlign:"right",fontWeight:600}}>{fmt(v,dc)}</td>
+                        <td style={{padding:"10px 8px",textAlign:"right",color:S.textDim}}>{sh.toFixed(2)}%</td>
+                        <td style={{padding:"10px 8px",textAlign:"right",color:gl>=0?GREEN:RED,fontWeight:500}}>{gl>=0?"+":"-"}{fmt(Math.abs(gl),dc)}</td>
+                        <td style={{padding:"10px 8px",textAlign:"right",color:glp>=0?GREEN:RED}}>{pct(glp)}</td>
+                        <td style={{padding:"10px 8px",textAlign:"right"}}>{hasLive?(chg?<span style={{fontSize:11,padding:"2px 8px",borderRadius:99,background:chg.diff>=0?GREEN_DIM:"rgba(255,69,58,0.1)",color:chg.diff>=0?GREEN:RED,fontWeight:600}}>{chg.diff>=0?"+":""}{chg.diff.toFixed(2)}%</span>:<span style={{fontSize:10,color:S.textFaint}}>●</span>):<span style={{fontSize:10,color:S.textFaint}}>—</span>}</td>
+                        <td style={{padding:"10px 8px",textAlign:"right",whiteSpace:"nowrap"}}>
+                          <button onClick={()=>startEditH(oi)} style={{background:"none",border:"none",cursor:"pointer",padding:"4px 6px",color:S.textDim,fontSize:14}}>✎</button>
+                          <button onClick={()=>setHoldings(p=>p.filter((_,j)=>j!==oi))} style={{background:"none",border:"none",cursor:"pointer",padding:"4px 6px",color:S.textDim,fontSize:14}}>🗑</button>
                         </td>
                       </tr>
                     );
@@ -387,94 +520,148 @@ function App(){
       {/* TRANSACTIONS */}
       {tab==="transactions"&&(
         <div>
-          <div style={{display:"flex",gap:8,marginBottom:"1rem",flexWrap:"wrap",alignItems:"center"}}>
-            <select value={txFt} onChange={e=>setTxFt(e.target.value)}>
-              <option value="All">All types</option>{ASSET_TYPES.map(t=><option key={t}>{t}</option>)}
-            </select>
-            <div style={{flex:1}}/>
-            <button onClick={exportTxCSV} style={{fontSize:13,padding:"6px 14px"}}>⬇ Export CSV</button>
-            <button onClick={()=>setShowTx(true)}
-              style={{fontSize:13,padding:"6px 14px",background:"var(--bgi)",color:"var(--ti)",border:"0.5px solid var(--bi)"}}>
-              + New transaction
-            </button>
+          <div style={{display:"flex",gap:2,marginBottom:20,background:S.card,borderRadius:10,padding:4,border:`1px solid ${S.cardBorder}`,width:"fit-content"}}>
+            {[["manual","Manual Trades"],["yields","Yield / Staking"]].map(([id,label])=>(
+              <button key={id} onClick={()=>setTxSub(id)} style={{padding:"7px 18px",fontSize:13,background:txSub===id?GREEN_DIM:"transparent",color:txSub===id?GREEN:S.textDim,border:`1px solid ${txSub===id?GREEN_BORDER:"transparent"}`,borderRadius:8,cursor:"pointer",fontWeight:txSub===id?600:400,fontFamily:"inherit"}}>{label}</button>
+            ))}
           </div>
-          {showTx&&(
-            <div style={{...card,border:"0.5px solid var(--b2)",marginBottom:"1rem"}}>
-              <p style={{fontWeight:500,fontSize:14,marginBottom:12}}>New transaction</p>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Transaction type</p>
-                  <select value={txForm.type} onChange={e=>setTxForm(f=>({...f,type:e.target.value}))} style={{width:"100%"}}>
-                    <option value="BUY">BUY</option><option value="SELL">SELL</option></select></div>
-                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Asset name</p>
-                  <input value={txForm.assetName} onChange={e=>setTxForm(f=>({...f,assetName:e.target.value}))}
-                    list="hnames" style={{width:"100%"}}/>
-                  <datalist id="hnames">{holdings.map(h=><option key={h.name} value={h.name}/>)}</datalist></div>
-                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Asset type</p>
-                  <select value={txForm.assetType} onChange={e=>setTxForm(f=>({...f,assetType:e.target.value}))} style={{width:"100%"}}>
-                    {ASSET_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
-                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Currency</p>
-                  <select value={txForm.currency} onChange={e=>setTxForm(f=>({...f,currency:e.target.value}))} style={{width:"100%"}}>
-                    {CURRENCIES.map(c=><option key={c}>{c}</option>)}</select></div>
-                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Price per unit ({txForm.currency})</p>
-                  <input type="number" value={txForm.price} onChange={e=>setTxForm(f=>({...f,price:e.target.value}))} style={{width:"100%"}}/></div>
-                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Quantity</p>
-                  <input type="number" value={txForm.quantity} onChange={e=>setTxForm(f=>({...f,quantity:e.target.value}))} style={{width:"100%"}}/></div>
-                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Tag</p>
-                  <select value={txForm.tag} onChange={e=>setTxForm(f=>({...f,tag:e.target.value}))} style={{width:"100%"}}>
-                    {TAGS.map(t=><option key={t}>{t}</option>)}</select></div>
-                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Note (optional)</p>
-                  <input value={txForm.note} onChange={e=>setTxForm(f=>({...f,note:e.target.value}))} style={{width:"100%"}}/></div>
+
+          {txSub==="manual"&&(
+            <div>
+              <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+                <select value={txFt} onChange={e=>setTxFt(e.target.value)} style={{...iS,width:"auto"}}><option value="All">All types</option>{ASSET_TYPES.map(t=><option key={t}>{t}</option>)}</select>
+                <div style={{flex:1}}/>
+                <button onClick={exportTxCSV} style={bG}>⬇ Export</button>
+                <label style={{...bG,display:"inline-block",cursor:"pointer"}}>⬆ Import<input type="file" accept=".csv" style={{display:"none"}} onChange={importTxCSV}/></label>
+                <button onClick={()=>{setTxForm({type:"BUY",assetName:"",assetType:"Stocks",currency:"USD",price:"",quantity:"",tag:"Growth",note:""});setEditTxIdx(null);setShowTx(true);}} style={bP}>+ New transaction</button>
               </div>
-              {txForm.price&&txForm.quantity&&(
-                <div style={{marginTop:10,padding:"8px 12px",background:"var(--bg2)",borderRadius:"var(--r1)",fontSize:13}}>
-                  Total: <strong>{fmt(parseFloat(txForm.price||0)*parseFloat(txForm.quantity||0),txForm.currency)}</strong>
+              {showTx&&(
+                <div style={{...card,marginBottom:16}}>
+                  <p style={{margin:"0 0 14px",fontWeight:600,fontSize:14}}>{editTxIdx!==null?"Edit Transaction":"New Transaction"}</p>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                    <div><Lbl>Transaction type</Lbl><select value={txForm.type} onChange={e=>setTxForm(f=>({...f,type:e.target.value}))} style={iS}><option value="BUY">BUY</option><option value="SELL">SELL</option></select></div>
+                    <div><Lbl>Asset name</Lbl><input value={txForm.assetName} onChange={e=>setTxForm(f=>({...f,assetName:e.target.value}))} list="hnames" style={iS}/><datalist id="hnames">{holdings.map(h=><option key={h.name} value={h.name}/>)}</datalist></div>
+                    <div><Lbl>Asset type</Lbl><select value={txForm.assetType} onChange={e=>setTxForm(f=>({...f,assetType:e.target.value}))} style={iS}>{ASSET_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
+                    <div><Lbl>Currency</Lbl><select value={txForm.currency} onChange={e=>setTxForm(f=>({...f,currency:e.target.value}))} style={iS}>{CURRENCIES.map(c=><option key={c}>{c}</option>)}</select></div>
+                    <div><Lbl>Price per unit</Lbl><input type="number" value={txForm.price} onChange={e=>setTxForm(f=>({...f,price:e.target.value}))} style={iS}/></div>
+                    <div><Lbl>Quantity</Lbl><input type="number" value={txForm.quantity} onChange={e=>setTxForm(f=>({...f,quantity:e.target.value}))} style={iS}/></div>
+                    <div><Lbl>Tag</Lbl><select value={txForm.tag} onChange={e=>setTxForm(f=>({...f,tag:e.target.value}))} style={iS}>{TAGS.map(t=><option key={t}>{t}</option>)}</select></div>
+                    <div><Lbl>Note (optional)</Lbl><input value={txForm.note} onChange={e=>setTxForm(f=>({...f,note:e.target.value}))} style={iS}/></div>
+                  </div>
+                  {txForm.price&&txForm.quantity&&<div style={{marginTop:12,padding:"10px 14px",background:GREEN_DIM,border:`1px solid ${GREEN_BORDER}`,borderRadius:8,fontSize:13}}>Total: <strong style={{color:GREEN}}>{fmt(parseFloat(txForm.price||0)*parseFloat(txForm.quantity||0),txForm.currency)}</strong></div>}
+                  <div style={{display:"flex",gap:8,marginTop:14}}>
+                    <button onClick={commitTx} style={txForm.type==="BUY"?bP:bD}>Confirm {txForm.type}</button>
+                    <button onClick={()=>{setShowTx(false);setEditTxIdx(null);}} style={bG}>Cancel</button>
+                  </div>
                 </div>
               )}
-              <div style={{display:"flex",gap:8,marginTop:12}}>
-                <button onClick={commitTx} style={{fontSize:13,padding:"6px 16px",
-                  background:txForm.type==="BUY"?"var(--bgi)":"rgba(216,90,48,0.12)",
-                  color:txForm.type==="BUY"?"var(--ti)":"#D85A30",
-                  border:`0.5px solid ${txForm.type==="BUY"?"var(--bi)":"#D85A30"}`}}>
-                  Confirm {txForm.type}
-                </button>
-                <button onClick={()=>setShowTx(false)} style={{fontSize:13,padding:"6px 16px"}}>Cancel</button>
-              </div>
+              {sortedTx.length===0?<p style={{color:S.textDim,fontSize:13}}>No transactions yet.</p>:(
+                <div style={{overflowX:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                    <thead>
+                      <tr style={{borderBottom:`1px solid ${S.cardBorder}`}}>
+                        {[["timestamp","Date/Time",true],["type","Type"],["assetName","Asset",true],["assetType","Category"],["price","Price"],["quantity","Qty"],["total","Total"]].map(([col,label,left])=>(
+                          <th key={col} onClick={()=>srtTx(col)} style={thStyle(col,left)}>{label}{tsi(col)}</th>
+                        ))}
+                        <th style={thStyle("note")}>Note</th>
+                        <th style={{padding:"10px 8px"}}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedTx.map((t,i)=>(
+                        <tr key={t.id||i} style={{borderBottom:`1px solid ${S.cardBorder}`}}>
+                          <td style={{padding:"10px 8px",fontSize:12,color:S.textDim,whiteSpace:"nowrap"}}>{new Date(t.timestamp).toLocaleString()}</td>
+                          <td style={{padding:"10px 8px",textAlign:"right"}}><span style={{fontSize:11,padding:"2px 10px",borderRadius:99,fontWeight:600,background:t.type==="BUY"?GREEN_DIM:t.type==="YIELD"?"rgba(10,132,255,0.12)":"rgba(255,69,58,0.12)",color:t.type==="BUY"?GREEN:t.type==="YIELD"?BLUE:RED}}>{t.type}</span></td>
+                          <td style={{padding:"10px 8px",fontWeight:600}}>{t.assetName}</td>
+                          <td style={{padding:"10px 8px",textAlign:"right",color:S.textDim,fontSize:12}}>{t.assetType}</td>
+                          <td style={{padding:"10px 8px",textAlign:"right",fontFamily:"monospace"}}>{fmt(t.price,t.currency)}</td>
+                          <td style={{padding:"10px 8px",textAlign:"right",fontFamily:"monospace"}}>{t.quantity}</td>
+                          <td style={{padding:"10px 8px",textAlign:"right",fontWeight:600}}>{fmt(t.price*t.quantity,t.currency)}</td>
+                          <td style={{padding:"10px 8px",fontSize:12,color:S.textDim,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.note||"—"}</td>
+                          <td style={{padding:"10px 8px",textAlign:"right",whiteSpace:"nowrap"}}>
+                            <button onClick={()=>startEditTx(i)} style={{background:"none",border:"none",cursor:"pointer",padding:"4px 6px",color:S.textDim,fontSize:14}}>✎</button>
+                            <button onClick={()=>deleteTx(i)} style={{background:"none",border:"none",cursor:"pointer",padding:"4px 6px",color:S.textDim,fontSize:14}}>🗑</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
-          {sortedTx.length===0?<p style={{color:"var(--t2)",fontSize:13}}>No transactions yet. Use "New transaction" to record a buy or sell.</p>:(
-            <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-                <thead>
-                  <tr style={{borderBottom:"0.5px solid var(--b1)"}}>
-                    <th style={txThS("timestamp",true)} onClick={()=>sortTx("timestamp")}>Date / Time{tsi("timestamp")}</th>
-                    <th style={txThS("type")} onClick={()=>sortTx("type")}>Type{tsi("type")}</th>
-                    <th style={txThS("assetName",true)} onClick={()=>sortTx("assetName")}>Asset{tsi("assetName")}</th>
-                    <th style={txThS("assetType")} onClick={()=>sortTx("assetType")}>Category{tsi("assetType")}</th>
-                    <th style={txThS("price")} onClick={()=>sortTx("price")}>Price{tsi("price")}</th>
-                    <th style={txThS("quantity")} onClick={()=>sortTx("quantity")}>Qty{tsi("quantity")}</th>
-                    <th style={txThS("total")} onClick={()=>sortTx("total")}>Total{tsi("total")}</th>
-                    <th style={{padding:"8px 6px",color:"var(--t2)"}}>Note</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedTx.map((t,i)=>(
-                    <tr key={t.id||i} style={{borderBottom:"0.5px solid var(--b1)"}}>
-                      <td style={{padding:"8px 6px",fontSize:12,color:"var(--t2)",whiteSpace:"nowrap"}}>{new Date(t.timestamp).toLocaleString()}</td>
-                      <td style={{padding:"8px 6px",textAlign:"right"}}>
-                        <span style={{fontSize:11,padding:"2px 8px",borderRadius:"var(--r1)",fontWeight:500,
-                          background:t.type==="BUY"?"rgba(55,138,221,0.12)":"rgba(216,90,48,0.12)",
-                          color:t.type==="BUY"?"#378ADD":"#D85A30"}}>{t.type}</span>
-                      </td>
-                      <td style={{padding:"8px 6px",fontWeight:500}}>{t.assetName}</td>
-                      <td style={{padding:"8px 6px",textAlign:"right",color:"var(--t2)"}}>{t.assetType}</td>
-                      <td style={{padding:"8px 6px",textAlign:"right"}}>{fmt(t.price,t.currency)}</td>
-                      <td style={{padding:"8px 6px",textAlign:"right"}}>{t.quantity}</td>
-                      <td style={{padding:"8px 6px",textAlign:"right",fontWeight:500}}>{fmt(t.price*t.quantity,t.currency)}</td>
-                      <td style={{padding:"8px 6px",fontSize:12,color:"var(--t2)"}}>{t.note||"—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+          {txSub==="yields"&&(
+            <div>
+              <div style={{display:"flex",justifyContent:"flex-end",marginBottom:16}}>
+                <button onClick={()=>setShowY(true)} style={bP}>+ New yield / staking</button>
+              </div>
+              {showY&&(
+                <div style={{...card,marginBottom:20}}>
+                  <p style={{margin:"0 0 14px",fontWeight:600,fontSize:14}}>New Yield / Staking Schedule</p>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                    <div><Lbl>Platform / Asset name</Lbl><input value={yForm.assetName} onChange={e=>setYForm(f=>({...f,assetName:e.target.value}))} style={iS}/></div>
+                    <div><Lbl>Principal amount</Lbl><input type="number" value={yForm.principal} onChange={e=>setYForm(f=>({...f,principal:e.target.value}))} style={iS}/></div>
+                    <div><Lbl>Principal currency</Lbl><select value={yForm.currency} onChange={e=>setYForm(f=>({...f,currency:e.target.value}))} style={iS}>{CURRENCIES.map(c=><option key={c}>{c}</option>)}</select></div>
+                    <div><Lbl>APR (%)</Lbl><input type="number" value={yForm.apr} onChange={e=>setYForm(f=>({...f,apr:e.target.value}))} style={iS}/></div>
+                    <div><Lbl>Duration (days)</Lbl><input type="number" value={yForm.durationDays} onChange={e=>setYForm(f=>({...f,durationDays:e.target.value}))} style={iS}/></div>
+                    <div><Lbl>Start date</Lbl><input type="date" value={yForm.startDate} onChange={e=>setYForm(f=>({...f,startDate:e.target.value}))} style={iS}/></div>
+                    <div><Lbl>Reward asset name</Lbl><input value={yForm.rewardAsset} onChange={e=>setYForm(f=>({...f,rewardAsset:e.target.value}))} list="hnames2" style={iS}/><datalist id="hnames2">{holdings.map(h=><option key={h.name} value={h.name}/>)}</datalist></div>
+                    <div><Lbl>Reward asset type</Lbl><select value={yForm.rewardAssetType} onChange={e=>setYForm(f=>({...f,rewardAssetType:e.target.value}))} style={iS}>{ASSET_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
+                    <div><Lbl>Reward currency</Lbl><select value={yForm.rewardCurrency} onChange={e=>setYForm(f=>({...f,rewardCurrency:e.target.value}))} style={iS}>{CURRENCIES.map(c=><option key={c}>{c}</option>)}</select></div>
+                    <div><Lbl>Tag</Lbl><select value={yForm.tag} onChange={e=>setYForm(f=>({...f,tag:e.target.value}))} style={iS}>{TAGS.map(t=><option key={t}>{t}</option>)}</select></div>
+                    <div style={{gridColumn:"1/-1"}}><Lbl>Note (optional)</Lbl><input value={yForm.note} onChange={e=>setYForm(f=>({...f,note:e.target.value}))} style={iS}/></div>
+                  </div>
+                  {yForm.principal&&yForm.apr&&yForm.durationDays&&(
+                    <div style={{marginTop:12,padding:"12px 14px",background:GREEN_DIM,border:`1px solid ${GREEN_BORDER}`,borderRadius:8,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+                      {[["Daily earnings",fmt((parseFloat(yForm.principal)*(parseFloat(yForm.apr)/100))/365,yForm.currency)],["Total projected",fmt((parseFloat(yForm.principal)*(parseFloat(yForm.apr)/100))/365*parseInt(yForm.durationDays||0),yForm.currency)],["Effective rate",((parseFloat(yForm.apr)/365)*parseInt(yForm.durationDays||0)).toFixed(4)+"%"]].map(([l,v])=>(
+                        <div key={l}><p style={{margin:"0 0 2px",fontSize:11,color:S.textDim}}>{l}</p><p style={{margin:0,fontWeight:600,color:GREEN}}>{v}</p></div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{display:"flex",gap:8,marginTop:14}}>
+                    <button onClick={addYield} style={bP}>Start yield</button>
+                    <button onClick={()=>setShowY(false)} style={bG}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              {yields.length===0?<p style={{color:S.textDim,fontSize:13}}>No yield schedules yet.</p>
+                :yields.map((y,i)=>{
+                  const{elapsed,remaining,daily,totalProjected,accrued,progress}=yStats(y);
+                  const isExp=remaining<=0&&!y.claimed;
+                  const sc=y.claimed?S.textDim:isExp?RED:GREEN;
+                  return(
+                    <div key={y.id||i} style={{...card,marginBottom:12,opacity:y.claimed?0.6:1,borderLeft:`3px solid ${sc}`}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                        <div>
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                            <p style={{margin:0,fontWeight:700,fontSize:15}}>{y.assetName}</p>
+                            <span style={{fontSize:11,padding:"2px 10px",borderRadius:99,fontWeight:600,background:y.claimed?"rgba(255,255,255,0.06)":isExp?"rgba(255,69,58,0.12)":GREEN_DIM,color:sc}}>{y.claimed?"Claimed":isExp?"Expired":"Active"}</span>
+                          </div>
+                          <p style={{margin:0,fontSize:12,color:S.textDim}}>{fmt(y.principal,y.currency)} @ {y.apr}% APR · Reward → <span style={{color:GREEN}}>{y.rewardAsset}</span> · {y.durationDays} days</p>
+                        </div>
+                        {!y.claimed&&<button onClick={()=>claimYield(i)} style={isExp?bD:bP}>{isExp?"Claim & Close":"Claim early"}</button>}
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12}}>
+                        {[["Daily Earnings",fmt(daily,y.currency)],["Accrued So Far",fmt(accrued,y.currency)],["Total Projected",fmt(totalProjected,y.currency)],["Days Remaining",y.claimed?"—":`${remaining} / ${y.durationDays}`]].map(([l,v])=>(
+                          <div key={l} style={{background:S.bg,borderRadius:8,padding:"10px 12px",border:`1px solid ${S.cardBorder}`}}>
+                            <p style={{margin:"0 0 4px",fontSize:10,color:S.textDim,textTransform:"uppercase",letterSpacing:"0.06em"}}>{l}</p>
+                            <p style={{margin:0,fontSize:14,fontWeight:600,color:l==="Accrued So Far"?GREEN:S.text}}>{v}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {!y.claimed&&(
+                        <div>
+                          <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:S.textDim,marginBottom:6}}><span>Day {elapsed} of {y.durationDays}</span><span>{progress.toFixed(1)}%</span></div>
+                          <div style={{height:4,background:S.inputBorder,borderRadius:99,overflow:"hidden"}}>
+                            <div style={{width:progress+"%",height:"100%",background:isExp?RED:GREEN,borderRadius:99,boxShadow:`0 0 8px ${isExp?RED:GREEN}`}}/>
+                          </div>
+                        </div>
+                      )}
+                      {y.claimed&&<p style={{fontSize:12,color:S.textDim,marginTop:4}}>Claimed on {new Date(y.claimedAt).toLocaleString()}</p>}
+                    </div>
+                  );
+                })}
             </div>
           )}
         </div>
@@ -483,56 +670,53 @@ function App(){
       {/* GOALS */}
       {tab==="goals"&&(
         <div>
-          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:"1rem"}}>
-            <button onClick={()=>setShowG(true)}
-              style={{fontSize:13,padding:"6px 14px",background:"var(--bgi)",color:"var(--ti)",border:"0.5px solid var(--bi)"}}>
-              + Add goal
-            </button>
+          <div style={{display:"flex",justifyContent:"flex-end",marginBottom:16}}>
+            <button onClick={()=>setShowG(true)} style={bP}>+ Add goal</button>
           </div>
           {showG&&(
-            <div style={{...card,border:"0.5px solid var(--b2)",marginBottom:"1rem"}}>
-              <p style={{fontWeight:500,fontSize:14,marginBottom:12}}>New goal</p>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Goal name</p>
-                  <input value={gForm.name} onChange={e=>setGForm(f=>({...f,name:e.target.value}))} style={{width:"100%"}}/></div>
-                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Target amount</p>
-                  <input type="number" value={gForm.target} onChange={e=>setGForm(f=>({...f,target:e.target.value}))} style={{width:"100%"}}/></div>
-                <div><p style={{fontSize:12,color:"var(--t2)",marginBottom:3}}>Currency</p>
-                  <select value={gForm.currency} onChange={e=>setGForm(f=>({...f,currency:e.target.value}))} style={{width:"100%"}}>
-                    {CURRENCIES.map(c=><option key={c}>{c}</option>)}</select></div>
+            <div style={{...card,marginBottom:16}}>
+              <p style={{margin:"0 0 14px",fontWeight:600,fontSize:14}}>New Goal</p>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+                <div><Lbl>Goal name</Lbl><input value={gForm.name} onChange={e=>setGForm(f=>({...f,name:e.target.value}))} style={iS}/></div>
+                <div><Lbl>Target amount</Lbl><input type="number" value={gForm.target} onChange={e=>setGForm(f=>({...f,target:e.target.value}))} style={iS}/></div>
+                <div><Lbl>Currency</Lbl><select value={gForm.currency} onChange={e=>setGForm(f=>({...f,currency:e.target.value}))} style={iS}>{CURRENCIES.map(c=><option key={c}>{c}</option>)}</select></div>
               </div>
-              <div style={{display:"flex",gap:8,marginTop:12}}>
-                <button onClick={saveG} style={{fontSize:13,padding:"6px 16px",background:"var(--bgi)",color:"var(--ti)",border:"0.5px solid var(--bi)"}}>Save</button>
-                <button onClick={()=>setShowG(false)} style={{fontSize:13,padding:"6px 16px"}}>Cancel</button>
+              <div style={{display:"flex",gap:8,marginTop:14}}>
+                <button onClick={saveG} style={bP}>Save</button>
+                <button onClick={()=>setShowG(false)} style={bG}>Cancel</button>
               </div>
             </div>
           )}
-          {goals.length===0?<p style={{color:"var(--t2)",fontSize:13}}>No goals yet.</p>
+          {goals.length===0?<p style={{color:S.textDim,fontSize:13}}>No goals yet.</p>
             :goals.map((g,i)=>{
               const cur=cvt(tv,"USD"),tgt=g.currency===dc?g.target:cvt(g.target,g.currency);
+              const p=Math.min((cur/tgt)*100,100);
               return(
-                <div key={i} style={{...card,marginBottom:12}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div key={i} style={{...card,marginBottom:12,borderLeft:`3px solid ${p>=100?GREEN:BLUE}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                     <div>
-                      <p style={{fontWeight:500}}>{g.name}</p>
-                      <p style={{fontSize:12,color:"var(--t2)"}}>Target in {g.currency}</p>
+                      <p style={{margin:0,fontWeight:700,fontSize:15}}>{g.name}</p>
+                      <p style={{margin:0,fontSize:12,color:S.textDim,marginTop:2}}>Target: {fmt(tgt,dc)} · Current: {fmt(cur,dc)}</p>
                     </div>
-                    <button onClick={()=>setGoals(p=>p.filter((_,j)=>j!==i))}
-                      style={{background:"none",border:"none",color:"var(--t2)",fontSize:15}}>🗑</button>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <span style={{fontSize:20,fontWeight:700,color:p>=100?GREEN:S.text}}>{p.toFixed(1)}%</span>
+                      <button onClick={()=>setGoals(p=>p.filter((_,j)=>j!==i))} style={{background:"none",border:"none",cursor:"pointer",color:S.textDim,fontSize:14}}>🗑</button>
+                    </div>
                   </div>
-                  <Bar current={cur} target={tgt} currency={dc}/>
+                  <div style={{height:6,background:S.inputBorder,borderRadius:99,overflow:"hidden"}}>
+                    <div style={{width:p+"%",height:"100%",background:p>=100?GREEN:BLUE,borderRadius:99,boxShadow:`0 0 10px ${p>=100?GREEN:BLUE}`}}/>
+                  </div>
                 </div>
               );
             })}
-          <div style={{marginTop:"1.5rem",padding:"1rem",background:"var(--bg2)",borderRadius:"var(--r1)",fontSize:12,color:"var(--t2)"}}>
-            ℹ Goal progress is based on total portfolio value ({fmt(tv,dc)}). Exchange rate: 1 USD = 4.000 MYR.
+          <div style={{marginTop:20,padding:"12px 14px",background:S.card,borderRadius:8,border:`1px solid ${S.cardBorder}`,fontSize:12,color:S.textDim}}>
+            ℹ Goal progress based on total portfolio value ({fmt(tv,dc)}). Live rate: 1 USD = {myrRate.toFixed(4)} MYR{rateUpdated?` (updated ${rateUpdated})`:""}.
           </div>
         </div>
       )}
     </div>
   );
 }
-
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
