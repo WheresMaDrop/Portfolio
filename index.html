@@ -22,11 +22,12 @@ button:active{opacity:0.75}
 <div id="root"><p style="padding:2rem;color:#666">Loading…</p></div>
 <script type="text/babel">
 const {useState,useEffect,useRef,useCallback}=React;
-const CURRENCIES=["USD","MYR"];
+const CURRENCIES=["USD","MYR","SGD"];
 const ASSET_TYPES=["Stocks","Crypto","ETF/Funds","Real Estate","Cash","Bonds","Provident Fund","Other"];
 const TAGS=["Growth","Dividend","Emergency Fund","Speculative","Stable","Retirement","Short-term"];
 const DEFAULT_MYR=4.000;
-const SK="pfDashV5";
+const DEFAULT_SGD=1.35;
+const SK="pfDashV7";
 const FINNHUB_KEY="d868ovhr01qnvdehfuhgd868ovhr01qnvdehfui0";
 const GREEN="rgb(50,215,45)";
 const GREEN_DIM="rgba(50,215,45,0.12)";
@@ -39,12 +40,33 @@ const iS={background:S.input,border:`1px solid ${S.inputBorder}`,borderRadius:8,
 const bP={background:GREEN_DIM,color:GREEN,border:`1px solid ${GREEN_BORDER}`,borderRadius:8,padding:"7px 16px",fontSize:13,cursor:"pointer",fontFamily:"inherit",fontWeight:500};
 const bG={background:"transparent",color:S.textDim,border:`1px solid ${S.inputBorder}`,borderRadius:8,padding:"7px 16px",fontSize:13,cursor:"pointer",fontFamily:"inherit"};
 const bD={background:"rgba(255,69,58,0.1)",color:RED,border:"1px solid rgba(255,69,58,0.3)",borderRadius:8,padding:"7px 16px",fontSize:13,cursor:"pointer",fontFamily:"inherit"};
-const toUSD=(a,c)=>c==="MYR"?a/DEFAULT_MYR:a;
-const fmt=(n,c="USD")=>(c==="USD"?"$":"RM")+Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+
+const toUSD=(a,c,myr,sgd)=>c==="MYR"?a/(myr||DEFAULT_MYR):c==="SGD"?a/(sgd||DEFAULT_SGD):a;
+const fmtC=(n,c="USD")=>(c==="USD"?"$":c==="MYR"?"RM":"S$")+Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
 const pct=n=>(n>=0?"+":"")+n.toFixed(2)+"%";
 const COLORS=["#32D72D","#0A84FF","#FF9F0A","#FF453A","#BF5AF2","#64D2FF","#FFD60A","#30D158"];
 const EMPTY_H={name:"",type:"Stocks",currency:"USD",purchasePrice:"",currentPrice:"",quantity:"",tag:"Growth",note:"",ticker:""};
 const EMPTY_Y={assetName:"",principal:"",currency:"USD",apr:"",durationDays:"",startDate:new Date().toISOString().slice(0,10),rewardAsset:"",rewardAssetType:"Crypto",rewardCurrency:"USD",tag:"Growth",note:""};
+
+const BURSA_STOCKS=[
+  {name:"Maybank",ticker:"KLSE:1155"},{name:"CIMB Group",ticker:"KLSE:1023"},
+  {name:"Public Bank",ticker:"KLSE:1295"},{name:"Tenaga Nasional",ticker:"KLSE:5347"},
+  {name:"IHH Healthcare",ticker:"KLSE:5225"},{name:"Petronas Gas",ticker:"KLSE:6033"},
+  {name:"Petronas Chemicals",ticker:"KLSE:5183"},{name:"Maxis",ticker:"KLSE:6012"},
+  {name:"Axiata",ticker:"KLSE:6888"},{name:"CelcomDigi",ticker:"KLSE:6947"},
+  {name:"Press Metal",ticker:"KLSE:8869"},{name:"Top Glove",ticker:"KLSE:7113"},
+  {name:"Hartalega",ticker:"KLSE:5168"},{name:"IOI Corp",ticker:"KLSE:1961"},
+  {name:"Sime Darby",ticker:"KLSE:4197"},{name:"Sime Darby Plantation",ticker:"KLSE:5285"},
+  {name:"Genting",ticker:"KLSE:3182"},{name:"Genting Malaysia",ticker:"KLSE:4715"},
+  {name:"Hong Leong Bank",ticker:"KLSE:5819"},{name:"Hong Leong Financial",ticker:"KLSE:1082"},
+  {name:"RHB Bank",ticker:"KLSE:1066"},{name:"MISC",ticker:"KLSE:3816"},
+  {name:"PPB Group",ticker:"KLSE:4065"},{name:"Kuala Lumpur Kepong",ticker:"KLSE:2445"},
+  {name:"Dialog Group",ticker:"KLSE:7277"},{name:"Telekom Malaysia",ticker:"KLSE:4863"},
+  {name:"Mr DIY",ticker:"KLSE:5296"},{name:"CTOS Digital",ticker:"KLSE:5301"},
+  {name:"Inari Amertron",ticker:"KLSE:0166"},{name:"Malaysia Airports",ticker:"KLSE:5014"},
+];
+
+const CRYPTO_MAP={btc:"bitcoin",eth:"ethereum",sol:"solana",bnb:"binancecoin",xrp:"ripple",ada:"cardano",doge:"dogecoin",dot:"polkadot",matic:"matic-network",avax:"avalanche-2",link:"chainlink",ltc:"litecoin",uni:"uniswap",atom:"cosmos",xlm:"stellar",algo:"algorand",near:"near",ftm:"fantom",sand:"the-sandbox",mana:"decentraland",usdt:"tether",usdc:"usd-coin",shib:"shiba-inu",trx:"tron"};
 
 function Lbl({children}){return <p style={{margin:"0 0 5px",fontSize:11,color:S.textDim,textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:500}}>{children}</p>;}
 
@@ -68,7 +90,7 @@ function Pie({data}){
   );
 }
 
-function LineGraph({holdings,transactions}){
+function LineGraph({holdings,transactions,myrRate,sgdRate}){
   const [range,setRange]=useState("30D");
   const ref=useRef(null);
   const ranges=["7D","30D","3M","6M","1Y","ALL"];
@@ -82,17 +104,17 @@ function LineGraph({holdings,transactions}){
       let val=0;const hc={};
       transactions.filter(t=>t.timestamp&&t.timestamp.slice(0,10)<=ds).forEach(t=>{
         const k=t.assetName+"_"+t.currency;
-        if(!hc[k]) hc[k]={qty:0,price:t.price};
+        if(!hc[k]) hc[k]={qty:0,price:t.price,currency:t.currency};
         if(t.type==="BUY"||t.type==="YIELD") hc[k].qty+=t.quantity;
         else if(t.type==="SELL") hc[k].qty=Math.max(0,hc[k].qty-t.quantity);
         hc[k].price=t.price;
       });
-      if(Object.keys(hc).length===0) holdings.forEach(h=>{val+=toUSD(h.currentPrice*h.quantity,h.currency);});
-      else Object.values(hc).forEach(h=>{val+=toUSD(h.price*h.qty,"USD");});
+      if(Object.keys(hc).length===0) holdings.forEach(h=>{val+=toUSD(h.currentPrice*h.quantity,h.currency,myrRate,sgdRate);});
+      else Object.values(hc).forEach(h=>{val+=toUSD(h.price*h.qty,h.currency,myrRate,sgdRate);});
       pts.push({date:ds,value:val});
     }
     return pts;
-  },[range,holdings,transactions]);
+  },[range,holdings,transactions,myrRate,sgdRate]);
 
   useEffect(()=>{
     const canvas=ref.current;if(!canvas) return;
@@ -134,7 +156,7 @@ function LineGraph({holdings,transactions}){
     });
   },[getPts]);
 
-  const total=holdings.reduce((s,h)=>s+toUSD(h.currentPrice*h.quantity,h.currency),0);
+  const total=holdings.reduce((s,h)=>s+toUSD(h.currentPrice*h.quantity,h.currency,myrRate,sgdRate),0);
   return(
     <div style={{...card,marginBottom:16}}>
       <div style={{marginBottom:12}}>
@@ -143,10 +165,43 @@ function LineGraph({holdings,transactions}){
       </div>
       <canvas ref={ref} style={{width:"100%",height:180,display:"block"}}/>
       <div style={{display:"flex",justifyContent:"center",gap:4,marginTop:12}}>
-        {ranges.map(r=>(
-          <button key={r} onClick={()=>setRange(r)} style={{...bG,padding:"4px 12px",fontSize:12,background:range===r?GREEN_DIM:"transparent",color:range===r?GREEN:S.textDim,border:`1px solid ${range===r?GREEN_BORDER:S.inputBorder}`}}>{r}</button>
-        ))}
+        {ranges.map(r=><button key={r} onClick={()=>setRange(r)} style={{...bG,padding:"4px 12px",fontSize:12,background:range===r?GREEN_DIM:"transparent",color:range===r?GREEN:S.textDim,border:`1px solid ${range===r?GREEN_BORDER:S.inputBorder}`}}>{r}</button>)}
       </div>
+    </div>
+  );
+}
+
+function TickerField({hForm,setHForm}){
+  const isBursa=(hForm.currency==="MYR")&&(hForm.type==="Stocks"||hForm.type==="ETF/Funds");
+  const isCrypto=hForm.type==="Crypto";
+  const [search,setSearch]=useState(hForm._bursaSearch||"");
+  if(isBursa){
+    const matches=search?BURSA_STOCKS.filter(s=>s.name.toLowerCase().includes(search.toLowerCase())):[];
+    return(
+      <div style={{position:"relative"}}>
+        <Lbl>Bursa Stock — type name to search</Lbl>
+        <input value={search} onChange={e=>{setSearch(e.target.value);setHForm(f=>({...f,ticker:"",_bursaSearch:e.target.value}));}} placeholder="e.g. Maybank, CIMB…" style={iS} autoComplete="off"/>
+        {hForm.ticker&&<p style={{margin:"4px 0 0",fontSize:11,color:GREEN}}>✓ {hForm.ticker}</p>}
+        {matches.length>0&&!hForm.ticker&&(
+          <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:"#1a1a1a",border:`1px solid #2a2a2a`,borderRadius:8,zIndex:99,maxHeight:200,overflowY:"auto"}}>
+            {matches.map(s=>(
+              <div key={s.ticker} onClick={()=>{setHForm(f=>({...f,ticker:s.ticker,name:f.name||s.name,_bursaSearch:s.name}));setSearch(s.name);}}
+                style={{padding:"8px 12px",cursor:"pointer",fontSize:13,display:"flex",justifyContent:"space-between",borderBottom:`1px solid #1e1e1e`}}
+                onMouseEnter={e=>e.currentTarget.style.background="#222"}
+                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <span>{s.name}</span>
+                <span style={{color:GREEN,fontFamily:"monospace",fontSize:11}}>{s.ticker}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+  return(
+    <div>
+      <Lbl>{isCrypto?"Ticker (BTC, ETH, SOL…)":"Ticker (AAPL, MSFT, SPY…)"}</Lbl>
+      <input value={hForm.ticker||""} onChange={e=>setHForm(f=>({...f,ticker:e.target.value}))} placeholder={isCrypto?"BTC, ETH, SOL…":"AAPL, MSFT, SPY…"} style={iS}/>
     </div>
   );
 }
@@ -177,16 +232,22 @@ function App(){
   const [txSDir,setTxSDir]=useState("desc");
   const [txSub,setTxSub]=useState("manual");
   const [myrRate,setMyrRate]=useState(DEFAULT_MYR);
+  const [sgdRate,setSgdRate]=useState(DEFAULT_SGD);
   const [rateUpdated,setRateUpdated]=useState(null);
   const [refreshing,setRefreshing]=useState(false);
   const [lastRefresh,setLastRefresh]=useState(null);
   const [priceChanges,setPriceChanges]=useState({});
 
   useEffect(()=>{
-    try{const d=localStorage.getItem(SK);if(d){const p=JSON.parse(d);setHoldings(p.holdings||[]);setGoals(p.goals||[]);setTxs(p.txs||[]);setYields(p.yields||[]);setMyrRate(p.myrRate||DEFAULT_MYR);setLastRefresh(p.lastRefresh||null);}}catch{}
-    // Fetch live MYR rate
-    fetch("https://api.exchangerate-api.com/v4/latest/USD").then(r=>r.json()).then(d=>{if(d.rates?.MYR){setMyrRate(d.rates.MYR);setRateUpdated(new Date().toLocaleTimeString());}}).catch(()=>{});
-    // Auto-accrue yields
+    try{
+      const d=localStorage.getItem(SK);
+      if(d){const p=JSON.parse(d);setHoldings(p.holdings||[]);setGoals(p.goals||[]);setTxs(p.txs||[]);setYields(p.yields||[]);setMyrRate(p.myrRate||DEFAULT_MYR);setSgdRate(p.sgdRate||DEFAULT_SGD);setLastRefresh(p.lastRefresh||null);}
+    }catch{}
+    fetch("https://api.exchangerate-api.com/v4/latest/USD").then(r=>r.json()).then(d=>{
+      if(d.rates?.MYR) setMyrRate(d.rates.MYR);
+      if(d.rates?.SGD) setSgdRate(d.rates.SGD);
+      setRateUpdated(new Date().toLocaleTimeString());
+    }).catch(()=>{});
     setYields(prev=>prev.map(y=>{
       if(y.claimed) return y;
       const elapsed=Math.min(Math.max(Math.floor((new Date()-new Date(y.startDate))/86400000),0),y.durationDays);
@@ -197,7 +258,7 @@ function App(){
         setHoldings(prev=>{
           const idx=prev.findIndex(h=>h.name.toLowerCase()===y.rewardAsset.toLowerCase()&&h.currency===y.rewardCurrency);
           if(idx>=0) return prev.map((h,i)=>i===idx?{...h,quantity:h.quantity+newEarnings}:h);
-          return [...prev,{name:y.rewardAsset,type:y.rewardAssetType,currency:y.rewardCurrency,purchasePrice:1,currentPrice:1,quantity:newEarnings,tag:y.tag,note:`Auto-accrued: ${y.assetName}`,ticker:""}];
+          return[...prev,{name:y.rewardAsset,type:y.rewardAssetType,currency:y.rewardCurrency,purchasePrice:1,currentPrice:1,quantity:newEarnings,tag:y.tag,note:`Auto-accrued: ${y.assetName}`,ticker:""}];
         });
         return{...y,lastAccrued:totalAccrued,totalAccrued};
       }
@@ -205,26 +266,33 @@ function App(){
     }));
   },[]);
 
-  useEffect(()=>{try{localStorage.setItem(SK,JSON.stringify({holdings,goals,txs,yields,myrRate,lastRefresh}));}catch{}},[holdings,goals,txs,yields,myrRate,lastRefresh]);
+  useEffect(()=>{try{localStorage.setItem(SK,JSON.stringify({holdings,goals,txs,yields,myrRate,sgdRate,lastRefresh}));}catch{}},[holdings,goals,txs,yields,myrRate,sgdRate,lastRefresh]);
+
+  const cvt=useCallback((a,f)=>{const u=toUSD(a,f,myrRate,sgdRate);return dc==="USD"?u:dc==="MYR"?u*myrRate:u*sgdRate;},[dc,myrRate,sgdRate]);
+  const fmt=useCallback((n,c)=>fmtC(n,c||dc),[dc]);
 
   async function refreshPrices(){
     setRefreshing(true);
     const changes={};
     const upd=[...holdings];
-    // Crypto via CoinGecko
     const cryptoH=upd.filter(h=>h.type==="Crypto"&&h.ticker);
     if(cryptoH.length>0){
-      const ids=cryptoH.map(h=>h.ticker.toLowerCase()).join(",");
       try{
+        const listRes=await fetch("https://api.coingecko.com/api/v3/coins/list");
+        const coinList=await listRes.json();
+        const symMap={};
+        coinList.forEach(c=>{const sym=c.symbol.toLowerCase();if(!symMap[sym]) symMap[sym]=c.id;});
+        Object.assign(symMap,CRYPTO_MAP);
+        const ids=cryptoH.map(h=>symMap[h.ticker.toLowerCase()]||h.ticker.toLowerCase()).join(",");
         const r=await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`);
         const data=await r.json();
         cryptoH.forEach(h=>{
-          const price=data[h.ticker.toLowerCase()]?.usd;
+          const cgId=symMap[h.ticker.toLowerCase()]||h.ticker.toLowerCase();
+          const price=data[cgId]?.usd;
           if(price){const idx=upd.findIndex(x=>x.name===h.name&&x.currency===h.currency);const old=upd[idx].currentPrice;changes[h.name]={old,new:price,diff:((price-old)/old)*100};upd[idx]={...upd[idx],currentPrice:price};}
         });
       }catch(e){console.error("CoinGecko",e);}
     }
-    // Stocks/ETFs via Finnhub
     const stockH=upd.filter(h=>(h.type==="Stocks"||h.type==="ETF/Funds")&&h.ticker);
     for(const h of stockH){
       try{
@@ -233,13 +301,17 @@ function App(){
         if(data.c&&data.c>0){const idx=upd.findIndex(x=>x.name===h.name&&x.currency===h.currency);const old=upd[idx].currentPrice;changes[h.name]={old,new:data.c,diff:((data.c-old)/old)*100};upd[idx]={...upd[idx],currentPrice:data.c};}
       }catch(e){console.error("Finnhub",h.ticker,e);}
     }
-    // Refresh MYR
-    try{const r=await fetch("https://api.exchangerate-api.com/v4/latest/USD");const data=await r.json();if(data.rates?.MYR){setMyrRate(data.rates.MYR);setRateUpdated(new Date().toLocaleTimeString());}}catch{}
+    try{
+      const r=await fetch("https://api.exchangerate-api.com/v4/latest/USD");
+      const data=await r.json();
+      if(data.rates?.MYR) setMyrRate(data.rates.MYR);
+      if(data.rates?.SGD) setSgdRate(data.rates.SGD);
+      setRateUpdated(new Date().toLocaleTimeString());
+    }catch{}
     setHoldings(upd);setPriceChanges(changes);
-    const ts=new Date().toLocaleString();setLastRefresh(ts);setRefreshing(false);
+    setLastRefresh(new Date().toLocaleString());setRefreshing(false);
   }
 
-  const cvt=(a,f)=>{const u=toUSD(a,f);return dc==="USD"?u:u*myrRate;};
   const tv=holdings.reduce((s,h)=>s+cvt(h.currentPrice*h.quantity,h.currency),0);
   const tc=holdings.reduce((s,h)=>s+cvt(h.purchasePrice*h.quantity,h.currency),0);
   const tgl=tv-tc,tglp=tc>0?(tgl/tc)*100:0;
@@ -283,12 +355,13 @@ function App(){
 
   function saveH(){
     const h={...hForm,purchasePrice:parseFloat(hForm.purchasePrice)||0,currentPrice:parseFloat(hForm.currentPrice)||0,quantity:parseFloat(hForm.quantity)||0};
+    delete h._bursaSearch;
     if(!h.name) return;
     if(editIdx!==null){setHoldings(p=>p.map((x,i)=>i===editIdx?h:x));setEditIdx(null);}
     else setHoldings(p=>[...p,h]);
     setHForm(EMPTY_H);setShowH(false);
   }
-  function startEditH(i){const h=holdings[i];setHForm({...h,purchasePrice:String(h.purchasePrice),currentPrice:String(h.currentPrice),quantity:String(h.quantity)});setEditIdx(i);setShowH(true);}
+  function startEditH(i){const h=holdings[i];setHForm({...h,purchasePrice:String(h.purchasePrice),currentPrice:String(h.currentPrice),quantity:String(h.quantity),_bursaSearch:h.ticker?.startsWith("KLSE:")?BURSA_STOCKS.find(b=>b.ticker===h.ticker)?.name||"":""});setEditIdx(i);setShowH(true);}
   function saveG(){if(!gForm.name||!gForm.target) return;setGoals(p=>[...p,{...gForm,target:parseFloat(gForm.target)}]);setGForm({name:"",target:"",currency:"USD"});setShowG(false);}
 
   function commitTx(){
@@ -319,8 +392,7 @@ function App(){
     setYields(p=>[y,...p]);setYForm(EMPTY_Y);setShowY(false);
   }
   function claimYield(i){
-    const y=yields[i];
-    const daily=(y.principal*(y.apr/100))/365;
+    const y=yields[i];const daily=(y.principal*(y.apr/100))/365;
     const elapsed=Math.min(Math.max(Math.floor((new Date()-new Date(y.startDate))/86400000),0),y.durationDays);
     setTxs(p=>[{type:"YIELD",assetName:y.rewardAsset,assetType:y.rewardAssetType,currency:y.rewardCurrency,price:1,quantity:daily*elapsed,tag:y.tag,note:`Claimed: ${y.assetName} @ ${y.apr}% APR`,timestamp:new Date().toISOString(),id:Date.now()},...p]);
     setYields(p=>p.map((x,j)=>j===i?{...x,claimed:true,claimedAt:new Date().toISOString()}:x));
@@ -340,8 +412,7 @@ function App(){
   const liveCount=holdings.filter(h=>h.ticker&&(h.type==="Stocks"||h.type==="ETF/Funds"||h.type==="Crypto")).length;
   const TABS=["overview","holdings","transactions","goals"];
   const TL={overview:"Overview",holdings:"Holdings",transactions:"Transactions",goals:"Goals"};
-
-  const thStyle=(col,left)=>({padding:"10px 8px",textAlign:left?"left":"right",cursor:"pointer",userSelect:"none",color:S.textDim,fontWeight:500,fontSize:11,textTransform:"uppercase",letterSpacing:"0.05em"});
+  const thS=()=>({padding:"10px 8px",cursor:"pointer",userSelect:"none",color:S.textDim,fontWeight:500,fontSize:11,textTransform:"uppercase",letterSpacing:"0.05em"});
 
   return(
     <div style={{fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",color:S.text,background:S.bg,minHeight:"100vh",padding:"1.5rem 1rem"}}>
@@ -354,7 +425,7 @@ function App(){
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           <div style={{padding:"5px 12px",background:S.card,border:`1px solid ${S.cardBorder}`,borderRadius:8,fontSize:12,color:S.textDim}}>
-            <span style={{color:GREEN}}>●</span> 1 USD = <strong style={{color:S.text}}>{myrRate.toFixed(4)}</strong> MYR
+            <span style={{color:GREEN}}>●</span> MYR <strong style={{color:S.text}}>{myrRate.toFixed(4)}</strong> · SGD <strong style={{color:S.text}}>{sgdRate.toFixed(4)}</strong>
             {rateUpdated&&<span style={{marginLeft:6,fontSize:10,color:S.textFaint}}>@ {rateUpdated}</span>}
           </div>
           <button onClick={refreshPrices} disabled={refreshing} style={{...bP,display:"flex",alignItems:"center",gap:6,opacity:refreshing?0.6:1}}>
@@ -378,7 +449,7 @@ function App(){
       {tab==="overview"&&(
         <div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
-            {[{l:"Total Value",v:fmt(tv,dc),c:S.text},{l:"Total Cost",v:fmt(tc,dc),c:S.textDim},{l:"Gain / Loss",v:fmt(Math.abs(tgl),dc),c:tgl>=0?GREEN:RED,pre:tgl>=0?"▲ ":"▼ "},{l:"Return",v:pct(tglp),c:tglp>=0?GREEN:RED}].map(x=>(
+            {[{l:"Total Value",v:fmtC(tv,dc),c:S.text},{l:"Total Cost",v:fmtC(tc,dc),c:S.textDim},{l:"Gain / Loss",v:fmtC(Math.abs(tgl),dc),c:tgl>=0?GREEN:RED,pre:tgl>=0?"▲ ":"▼ "},{l:"Return",v:pct(tglp),c:tglp>=0?GREEN:RED}].map(x=>(
               <div key={x.l} style={{...card,borderLeft:`3px solid ${x.c===S.text||x.c===S.textDim?S.cardBorder:x.c}`}}>
                 <p style={{margin:"0 0 6px",fontSize:11,color:S.textDim,textTransform:"uppercase",letterSpacing:"0.06em"}}>{x.l}</p>
                 <p style={{margin:0,fontSize:20,fontWeight:700,color:x.c}}>{x.pre||""}{x.v}</p>
@@ -391,7 +462,7 @@ function App(){
               <div style={{display:"flex",alignItems:"center",gap:16}}>
                 <Pie data={byType}/>
                 <div style={{flex:1}}>
-                  {byType.length===0?<p style={{color:S.textDim,fontSize:13}}>No holdings yet.</p>:byType.map((d)=>(
+                  {byType.length===0?<p style={{color:S.textDim,fontSize:13}}>No holdings yet.</p>:byType.map(d=>(
                     <div key={d.label} style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:8}}>
                       <span style={{width:8,height:8,borderRadius:2,background:d.color,flexShrink:0,marginTop:3}}/>
                       <div style={{flex:1}}>
@@ -399,7 +470,7 @@ function App(){
                           <span style={{fontSize:12,color:S.textDim}}>{d.label}</span>
                           <span style={{fontSize:12,fontWeight:600}}>{((d.value/tv)*100).toFixed(1)}%</span>
                         </div>
-                        <div style={{fontSize:11,color:S.textFaint,marginTop:1}}>{fmt(d.value,dc)}</div>
+                        <div style={{fontSize:11,color:S.textFaint,marginTop:1}}>{fmtC(d.value,dc)}</div>
                       </div>
                     </div>
                   ))}
@@ -421,9 +492,9 @@ function App(){
                         </div>
                       </div>
                       <div style={{textAlign:"right"}}>
-                        <p style={{margin:0,fontWeight:600,fontSize:13}}>{fmt(v,dc)}</p>
+                        <p style={{margin:0,fontWeight:600,fontSize:13}}>{fmtC(v,dc)}</p>
                         <div style={{display:"flex",alignItems:"center",gap:6,justifyContent:"flex-end"}}>
-                          <p style={{margin:0,fontSize:11,color:gl>=0?GREEN:RED}}>{gl>=0?"▲":"▼"} {fmt(Math.abs(gl),dc)}</p>
+                          <p style={{margin:0,fontSize:11,color:gl>=0?GREEN:RED}}>{gl>=0?"▲":"▼"} {fmtC(Math.abs(gl),dc)}</p>
                           {chg&&<span style={{fontSize:10,padding:"1px 6px",borderRadius:99,background:chg.diff>=0?GREEN_DIM:"rgba(255,69,58,0.12)",color:chg.diff>=0?GREEN:RED,fontWeight:600}}>{chg.diff>=0?"+":""}{chg.diff.toFixed(2)}%</span>}
                         </div>
                       </div>
@@ -438,10 +509,10 @@ function App(){
       {/* HOLDINGS */}
       {tab==="holdings"&&(
         <div>
-          <LineGraph holdings={holdings} transactions={txs}/>
+          <LineGraph holdings={holdings} transactions={txs} myrRate={myrRate} sgdRate={sgdRate}/>
           {holdings.some(h=>!h.ticker&&(h.type==="Stocks"||h.type==="ETF/Funds"||h.type==="Crypto"))&&(
             <div style={{marginBottom:14,padding:"10px 14px",background:"rgba(10,132,255,0.08)",border:"1px solid rgba(10,132,255,0.25)",borderRadius:8,fontSize:12,color:"#64ACFF"}}>
-              💡 Add a ticker symbol to Stocks/ETFs (e.g. <strong>AAPL</strong>) and Crypto (e.g. <strong>bitcoin</strong>) to enable live price refresh.
+              💡 Add a ticker to enable live prices. <strong>US Stocks/ETFs</strong>: AAPL, TSLA · <strong>Bursa</strong>: search by name (MYR + Stocks) · <strong>Crypto</strong>: BTC, ETH, SOL
             </div>
           )}
           <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
@@ -460,7 +531,7 @@ function App(){
                 <div><Lbl>Currency</Lbl><select value={hForm.currency} onChange={e=>setHForm(f=>({...f,currency:e.target.value}))} style={iS}>{CURRENCIES.map(c=><option key={c}>{c}</option>)}</select></div>
                 <div><Lbl>Asset type</Lbl><select value={hForm.type} onChange={e=>setHForm(f=>({...f,type:e.target.value}))} style={iS}>{ASSET_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
                 {[["Purchase price","purchasePrice"],["Current price","currentPrice"]].map(([l,k])=>(<div key={k}><Lbl>{l} ({hForm.currency})</Lbl><input type="number" value={hForm[k]} onChange={e=>setHForm(f=>({...f,[k]:e.target.value}))} style={iS}/></div>))}
-                <div><Lbl>Ticker {(hForm.type==="Stocks"||hForm.type==="ETF/Funds")?"(e.g. AAPL)":hForm.type==="Crypto"?"(e.g. bitcoin)":"(optional)"}</Lbl><input value={hForm.ticker||""} onChange={e=>setHForm(f=>({...f,ticker:e.target.value}))} placeholder={hForm.type==="Crypto"?"bitcoin, ethereum…":"AAPL, MSFT…"} style={iS}/></div>
+                <TickerField hForm={hForm} setHForm={setHForm}/>
                 <div><Lbl>Tag</Lbl><select value={hForm.tag} onChange={e=>setHForm(f=>({...f,tag:e.target.value}))} style={iS}>{TAGS.map(t=><option key={t}>{t}</option>)}</select></div>
                 <div style={{gridColumn:"1/-1"}}><Lbl>Note (optional)</Lbl><input value={hForm.note} onChange={e=>setHForm(f=>({...f,note:e.target.value}))} style={iS}/></div>
               </div>
@@ -476,9 +547,9 @@ function App(){
                 <thead>
                   <tr style={{borderBottom:`1px solid ${S.cardBorder}`}}>
                     {[["name","Name",true],["type","Type"],["tag","Tag"],["qty","Qty"],["value","Value"],["share","Share%"],["gl","G/L"],["glp","G/L%"]].map(([col,label,left])=>(
-                      <th key={col} onClick={()=>srtH(col)} style={thStyle(col,left)}>{label}{si(col)}</th>
+                      <th key={col} onClick={()=>srtH(col)} style={{...thS(),textAlign:left?"left":"right",color:sCol===col?S.text:S.textDim}}>{label}{si(col)}</th>
                     ))}
-                    <th style={{...thStyle("live"),textAlign:"right"}}>Live</th>
+                    <th style={{...thS(),textAlign:"right"}}>Live</th>
                     <th style={{padding:"10px 8px"}}></th>
                   </tr>
                 </thead>
@@ -498,9 +569,9 @@ function App(){
                         <td style={{padding:"10px 8px",textAlign:"right",color:S.textDim,fontSize:12}}>{h.type}</td>
                         <td style={{padding:"10px 8px",textAlign:"right"}}><span style={{fontSize:11,padding:"2px 8px",borderRadius:99,background:"rgba(255,255,255,0.05)",color:S.textDim}}>{h.tag}</span></td>
                         <td style={{padding:"10px 8px",textAlign:"right",fontFamily:"monospace"}}>{h.quantity.toFixed(6).replace(/\.?0+$/,"")}</td>
-                        <td style={{padding:"10px 8px",textAlign:"right",fontWeight:600}}>{fmt(v,dc)}</td>
+                        <td style={{padding:"10px 8px",textAlign:"right",fontWeight:600}}>{fmtC(v,dc)}</td>
                         <td style={{padding:"10px 8px",textAlign:"right",color:S.textDim}}>{sh.toFixed(2)}%</td>
-                        <td style={{padding:"10px 8px",textAlign:"right",color:gl>=0?GREEN:RED,fontWeight:500}}>{gl>=0?"+":"-"}{fmt(Math.abs(gl),dc)}</td>
+                        <td style={{padding:"10px 8px",textAlign:"right",color:gl>=0?GREEN:RED,fontWeight:500}}>{gl>=0?"+":"-"}{fmtC(Math.abs(gl),dc)}</td>
                         <td style={{padding:"10px 8px",textAlign:"right",color:glp>=0?GREEN:RED}}>{pct(glp)}</td>
                         <td style={{padding:"10px 8px",textAlign:"right"}}>{hasLive?(chg?<span style={{fontSize:11,padding:"2px 8px",borderRadius:99,background:chg.diff>=0?GREEN_DIM:"rgba(255,69,58,0.1)",color:chg.diff>=0?GREEN:RED,fontWeight:600}}>{chg.diff>=0?"+":""}{chg.diff.toFixed(2)}%</span>:<span style={{fontSize:10,color:S.textFaint}}>●</span>):<span style={{fontSize:10,color:S.textFaint}}>—</span>}</td>
                         <td style={{padding:"10px 8px",textAlign:"right",whiteSpace:"nowrap"}}>
@@ -525,7 +596,6 @@ function App(){
               <button key={id} onClick={()=>setTxSub(id)} style={{padding:"7px 18px",fontSize:13,background:txSub===id?GREEN_DIM:"transparent",color:txSub===id?GREEN:S.textDim,border:`1px solid ${txSub===id?GREEN_BORDER:"transparent"}`,borderRadius:8,cursor:"pointer",fontWeight:txSub===id?600:400,fontFamily:"inherit"}}>{label}</button>
             ))}
           </div>
-
           {txSub==="manual"&&(
             <div>
               <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
@@ -543,12 +613,12 @@ function App(){
                     <div><Lbl>Asset name</Lbl><input value={txForm.assetName} onChange={e=>setTxForm(f=>({...f,assetName:e.target.value}))} list="hnames" style={iS}/><datalist id="hnames">{holdings.map(h=><option key={h.name} value={h.name}/>)}</datalist></div>
                     <div><Lbl>Asset type</Lbl><select value={txForm.assetType} onChange={e=>setTxForm(f=>({...f,assetType:e.target.value}))} style={iS}>{ASSET_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
                     <div><Lbl>Currency</Lbl><select value={txForm.currency} onChange={e=>setTxForm(f=>({...f,currency:e.target.value}))} style={iS}>{CURRENCIES.map(c=><option key={c}>{c}</option>)}</select></div>
-                    <div><Lbl>Price per unit</Lbl><input type="number" value={txForm.price} onChange={e=>setTxForm(f=>({...f,price:e.target.value}))} style={iS}/></div>
+                    <div><Lbl>Price per unit ({txForm.currency})</Lbl><input type="number" value={txForm.price} onChange={e=>setTxForm(f=>({...f,price:e.target.value}))} style={iS}/></div>
                     <div><Lbl>Quantity</Lbl><input type="number" value={txForm.quantity} onChange={e=>setTxForm(f=>({...f,quantity:e.target.value}))} style={iS}/></div>
                     <div><Lbl>Tag</Lbl><select value={txForm.tag} onChange={e=>setTxForm(f=>({...f,tag:e.target.value}))} style={iS}>{TAGS.map(t=><option key={t}>{t}</option>)}</select></div>
                     <div><Lbl>Note (optional)</Lbl><input value={txForm.note} onChange={e=>setTxForm(f=>({...f,note:e.target.value}))} style={iS}/></div>
                   </div>
-                  {txForm.price&&txForm.quantity&&<div style={{marginTop:12,padding:"10px 14px",background:GREEN_DIM,border:`1px solid ${GREEN_BORDER}`,borderRadius:8,fontSize:13}}>Total: <strong style={{color:GREEN}}>{fmt(parseFloat(txForm.price||0)*parseFloat(txForm.quantity||0),txForm.currency)}</strong></div>}
+                  {txForm.price&&txForm.quantity&&<div style={{marginTop:12,padding:"10px 14px",background:GREEN_DIM,border:`1px solid ${GREEN_BORDER}`,borderRadius:8,fontSize:13}}>Total: <strong style={{color:GREEN}}>{fmtC(parseFloat(txForm.price||0)*parseFloat(txForm.quantity||0),txForm.currency)}</strong></div>}
                   <div style={{display:"flex",gap:8,marginTop:14}}>
                     <button onClick={commitTx} style={txForm.type==="BUY"?bP:bD}>Confirm {txForm.type}</button>
                     <button onClick={()=>{setShowTx(false);setEditTxIdx(null);}} style={bG}>Cancel</button>
@@ -561,9 +631,9 @@ function App(){
                     <thead>
                       <tr style={{borderBottom:`1px solid ${S.cardBorder}`}}>
                         {[["timestamp","Date/Time",true],["type","Type"],["assetName","Asset",true],["assetType","Category"],["price","Price"],["quantity","Qty"],["total","Total"]].map(([col,label,left])=>(
-                          <th key={col} onClick={()=>srtTx(col)} style={thStyle(col,left)}>{label}{tsi(col)}</th>
+                          <th key={col} onClick={()=>srtTx(col)} style={{...thS(),textAlign:left?"left":"right",color:txSCol===col?S.text:S.textDim}}>{label}{tsi(col)}</th>
                         ))}
-                        <th style={thStyle("note")}>Note</th>
+                        <th style={{...thS()}}>Note</th>
                         <th style={{padding:"10px 8px"}}></th>
                       </tr>
                     </thead>
@@ -574,9 +644,9 @@ function App(){
                           <td style={{padding:"10px 8px",textAlign:"right"}}><span style={{fontSize:11,padding:"2px 10px",borderRadius:99,fontWeight:600,background:t.type==="BUY"?GREEN_DIM:t.type==="YIELD"?"rgba(10,132,255,0.12)":"rgba(255,69,58,0.12)",color:t.type==="BUY"?GREEN:t.type==="YIELD"?BLUE:RED}}>{t.type}</span></td>
                           <td style={{padding:"10px 8px",fontWeight:600}}>{t.assetName}</td>
                           <td style={{padding:"10px 8px",textAlign:"right",color:S.textDim,fontSize:12}}>{t.assetType}</td>
-                          <td style={{padding:"10px 8px",textAlign:"right",fontFamily:"monospace"}}>{fmt(t.price,t.currency)}</td>
+                          <td style={{padding:"10px 8px",textAlign:"right",fontFamily:"monospace"}}>{fmtC(t.price,t.currency)}</td>
                           <td style={{padding:"10px 8px",textAlign:"right",fontFamily:"monospace"}}>{t.quantity}</td>
-                          <td style={{padding:"10px 8px",textAlign:"right",fontWeight:600}}>{fmt(t.price*t.quantity,t.currency)}</td>
+                          <td style={{padding:"10px 8px",textAlign:"right",fontWeight:600}}>{fmtC(t.price*t.quantity,t.currency)}</td>
                           <td style={{padding:"10px 8px",fontSize:12,color:S.textDim,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.note||"—"}</td>
                           <td style={{padding:"10px 8px",textAlign:"right",whiteSpace:"nowrap"}}>
                             <button onClick={()=>startEditTx(i)} style={{background:"none",border:"none",cursor:"pointer",padding:"4px 6px",color:S.textDim,fontSize:14}}>✎</button>
@@ -590,7 +660,6 @@ function App(){
               )}
             </div>
           )}
-
           {txSub==="yields"&&(
             <div>
               <div style={{display:"flex",justifyContent:"flex-end",marginBottom:16}}>
@@ -614,7 +683,7 @@ function App(){
                   </div>
                   {yForm.principal&&yForm.apr&&yForm.durationDays&&(
                     <div style={{marginTop:12,padding:"12px 14px",background:GREEN_DIM,border:`1px solid ${GREEN_BORDER}`,borderRadius:8,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-                      {[["Daily earnings",fmt((parseFloat(yForm.principal)*(parseFloat(yForm.apr)/100))/365,yForm.currency)],["Total projected",fmt((parseFloat(yForm.principal)*(parseFloat(yForm.apr)/100))/365*parseInt(yForm.durationDays||0),yForm.currency)],["Effective rate",((parseFloat(yForm.apr)/365)*parseInt(yForm.durationDays||0)).toFixed(4)+"%"]].map(([l,v])=>(
+                      {[["Daily earnings",fmtC((parseFloat(yForm.principal)*(parseFloat(yForm.apr)/100))/365,yForm.currency)],["Total projected",fmtC((parseFloat(yForm.principal)*(parseFloat(yForm.apr)/100))/365*parseInt(yForm.durationDays||0),yForm.currency)],["Effective rate",((parseFloat(yForm.apr)/365)*parseInt(yForm.durationDays||0)).toFixed(4)+"%"]].map(([l,v])=>(
                         <div key={l}><p style={{margin:"0 0 2px",fontSize:11,color:S.textDim}}>{l}</p><p style={{margin:0,fontWeight:600,color:GREEN}}>{v}</p></div>
                       ))}
                     </div>
@@ -638,12 +707,12 @@ function App(){
                             <p style={{margin:0,fontWeight:700,fontSize:15}}>{y.assetName}</p>
                             <span style={{fontSize:11,padding:"2px 10px",borderRadius:99,fontWeight:600,background:y.claimed?"rgba(255,255,255,0.06)":isExp?"rgba(255,69,58,0.12)":GREEN_DIM,color:sc}}>{y.claimed?"Claimed":isExp?"Expired":"Active"}</span>
                           </div>
-                          <p style={{margin:0,fontSize:12,color:S.textDim}}>{fmt(y.principal,y.currency)} @ {y.apr}% APR · Reward → <span style={{color:GREEN}}>{y.rewardAsset}</span> · {y.durationDays} days</p>
+                          <p style={{margin:0,fontSize:12,color:S.textDim}}>{fmtC(y.principal,y.currency)} @ {y.apr}% APR · Reward → <span style={{color:GREEN}}>{y.rewardAsset}</span> · {y.durationDays} days</p>
                         </div>
                         {!y.claimed&&<button onClick={()=>claimYield(i)} style={isExp?bD:bP}>{isExp?"Claim & Close":"Claim early"}</button>}
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12}}>
-                        {[["Daily Earnings",fmt(daily,y.currency)],["Accrued So Far",fmt(accrued,y.currency)],["Total Projected",fmt(totalProjected,y.currency)],["Days Remaining",y.claimed?"—":`${remaining} / ${y.durationDays}`]].map(([l,v])=>(
+                        {[["Daily Earnings",fmtC(daily,y.currency)],["Accrued So Far",fmtC(accrued,y.currency)],["Total Projected",fmtC(totalProjected,y.currency)],["Days Remaining",y.claimed?"—":`${remaining} / ${y.durationDays}`]].map(([l,v])=>(
                           <div key={l} style={{background:S.bg,borderRadius:8,padding:"10px 12px",border:`1px solid ${S.cardBorder}`}}>
                             <p style={{margin:"0 0 4px",fontSize:10,color:S.textDim,textTransform:"uppercase",letterSpacing:"0.06em"}}>{l}</p>
                             <p style={{margin:0,fontSize:14,fontWeight:600,color:l==="Accrued So Far"?GREEN:S.text}}>{v}</p>
@@ -689,14 +758,14 @@ function App(){
           )}
           {goals.length===0?<p style={{color:S.textDim,fontSize:13}}>No goals yet.</p>
             :goals.map((g,i)=>{
-              const cur=cvt(tv,"USD"),tgt=g.currency===dc?g.target:cvt(g.target,g.currency);
+              const cur=cvt(tv,"USD"),tgt=g.currency===dc?g.target:g.currency==="USD"?cvt(g.target,"USD"):g.currency==="MYR"?cvt(g.target,"MYR"):cvt(g.target,"SGD");
               const p=Math.min((cur/tgt)*100,100);
               return(
                 <div key={i} style={{...card,marginBottom:12,borderLeft:`3px solid ${p>=100?GREEN:BLUE}`}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                     <div>
                       <p style={{margin:0,fontWeight:700,fontSize:15}}>{g.name}</p>
-                      <p style={{margin:0,fontSize:12,color:S.textDim,marginTop:2}}>Target: {fmt(tgt,dc)} · Current: {fmt(cur,dc)}</p>
+                      <p style={{margin:0,fontSize:12,color:S.textDim,marginTop:2}}>Target: {fmtC(tgt,dc)} · Current: {fmtC(cur,dc)}</p>
                     </div>
                     <div style={{display:"flex",alignItems:"center",gap:10}}>
                       <span style={{fontSize:20,fontWeight:700,color:p>=100?GREEN:S.text}}>{p.toFixed(1)}%</span>
@@ -710,7 +779,7 @@ function App(){
               );
             })}
           <div style={{marginTop:20,padding:"12px 14px",background:S.card,borderRadius:8,border:`1px solid ${S.cardBorder}`,fontSize:12,color:S.textDim}}>
-            ℹ Goal progress based on total portfolio value ({fmt(tv,dc)}). Live rate: 1 USD = {myrRate.toFixed(4)} MYR{rateUpdated?` (updated ${rateUpdated})`:""}.
+            ℹ Goal progress based on total portfolio value ({fmtC(tv,dc)}). Live rates: 1 USD = {myrRate.toFixed(4)} MYR · {sgdRate.toFixed(4)} SGD{rateUpdated?` (updated ${rateUpdated})`:""}.
           </div>
         </div>
       )}
